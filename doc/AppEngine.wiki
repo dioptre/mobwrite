@@ -1,0 +1,16 @@
+#summary Configuring MobWrite for Google App Engine.
+#labels Phase-Deploy
+
+= Introduction =
+
+Google offers a web application hosting service.  There are no costs, no ads, no spam.  The only catch is that there are quotas for how much traffic, storage and CPU time one can consume.  If your application isn't Slashdot, you shouldn't have a problem.
+
+= Details =
+
+ # Register an account with [http://appengine.google.com/ Google App Engine] and download the SDK.
+ # Download MobWrite (for App Engine) from the download tab (above).  Unzip it on your computer.
+ # Edit `app.yaml` to change the application name.
+ # Use the SDK to upload your copy of MobWrite: 'appcfg.py update /path/to/mobwrite/'
+ # If your web client is not hosted on this App Engine instance, then edit both the JavaScript include and gateway property in your client to point at your new App Engine instance.  [WebClient Detailed instructions].
+
+MobWrite should now be synchronizing.  If not, try the unit tests (`http://<appname>.appspot.com/static/tests/index.html`) and the demos (`http://<appname>.appspot.com/static/demos/index.html`).
