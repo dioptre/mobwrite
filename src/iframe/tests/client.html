@@ -1,0 +1,641 @@
+<!--
+  Test Harness for MobWrite Client
+
+  Copyright (C) November 2007 Google Inc.
+  http://code.google.com/p/google-mobwrite/
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<html>
+  <head>
+    <TITLE>Test Harness for MobWrite Client</TITLE>
+    <SCRIPT SRC="../diff_match_patch_uncompressed.js"></SCRIPT>
+    <SCRIPT SRC="../mobwrite_core.js"></SCRIPT>
+    <SCRIPT SRC="../mobwrite_form.js"></SCRIPT>
+    <SCRIPT SRC="../mobwrite_iframe.js"></SCRIPT>
+    <!--
+    <SCRIPT SRC="../compressed_mobwrite.js"></SCRIPT>
+    -->
+
+    <script type="text/javascript">
+      // Counters for unit test results.
+      var test_good = 0;
+      var test_bad = 0;
+
+      // If expected and actual are the identical, print 'Ok', otherwise 'Fail!'
+      function assertEquals(msg, expected, actual) {
+        if (typeof actual == 'undefined') {
+          // msg is optional.
+          actual = expected;
+          expected = msg;
+          msg = '';
+        }
+        if (expected === actual) {
+          document.write('<FONT COLOR="#009900">Ok</FONT><BR>');
+          test_good++;
+        } else {
+          document.write('<FONT COLOR="#990000"><BIG>Fail!</BIG></FONT><BR>');
+          msg += ' Expected: \'' + expected + '\' Actual: \'' + actual + '\'';
+          msg = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          msg = msg.replace(/\r\n/g, '&para;');
+          msg = msg.replace(/\n/g, '&para;');
+          msg = msg.replace(/\r/g, '&para;');
+          msg = msg.replace(/\u00A0/g, '&middot;');
+          document.write('<code>' + msg + '</code><BR>');
+          test_bad++;
+        }
+      }
+
+
+      // If expected and actual are the equivalent, pass the test.
+      function assertEquivalent(msg, expected, actual) {
+        if (typeof actual == 'undefined') {
+          // msg is optional.
+          actual = expected;
+          expected = msg;
+          msg = '';
+        }
+        if (_equivalent(expected, actual)) {
+          assertEquals(msg, String.toString(expected), String.toString(actual));
+        } else {
+          assertEquals(msg, expected, actual);
+        }
+      }
+
+
+      // Are a and b the equivalent? -- Recursive.
+      function _equivalent(a, b) {
+        if (a == b) {
+          return true;
+        }
+        if (typeof a == 'object' && typeof b == 'object' && a !== null && b !== null) {
+          if (String(a) != String(b)) {
+            return false;
+          }
+          for (var p in a) {
+            if (!_equivalent(a[p], b[p])) {
+              return false;
+            }
+          }
+          for (var p in b) {
+            if (!_equivalent(a[p], b[p])) {
+              return false;
+            }
+          }
+          return true;
+        }
+        return false;
+      }
+
+
+      function diff_rebuildtexts(diffs) {
+        // Construct the two texts which made up the diff originally.
+        var text1 = '';
+        var text2 = '';
+        for (var x = 0; x < diffs.length; x++) {
+          if (diffs[x][0] != DIFF_INSERT) {
+            text1 += diffs[x][1];
+          }
+          if (diffs[x][0] != DIFF_DELETE) {
+            text2 += diffs[x][1];
+          }
+        }
+        return [text1, text2];
+      }
+
+
+      // CORE TEST FUNCTIONS
+
+
+      function testUniqueId() {
+        // Test length
+        assertEquals(8, mobwrite.uniqueId().length);
+        // Two IDs should not be the same.
+        // There's a 1 in 4 trillion chance this test could fail normally.
+        assertEquals(false, mobwrite.uniqueId() == mobwrite.uniqueId());
+      }
+      
+
+      // TEXTAREA TEST FUNCTIONS
+
+
+      function testNormalizeLinebreaks() {
+        // Single
+        assertEquals('\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\n'));
+        assertEquals('\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\r'));
+        assertEquals('\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\r\n'));
+        // Double
+        assertEquals('\n\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\n\n'));
+        assertEquals('\n\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\r\r'));
+        assertEquals('\n\n', mobwrite.shareTextareaObj.normalizeLinebreaks_('\r\n\r\n'));
+        // Mixed
+        assertEquals('_\n_\n_\n_ _\n\n_\n\n_\n\n_',
+            mobwrite.shareTextareaObj.normalizeLinebreaks_('_\n_\r_\r\n_ _\n\n_\r\r_\r\n\r\n_'));
+      }
+
+
+      function testCursor() {
+        // Create a textarea.
+        var textarea = document.createElement('textarea');
+        textarea.id = 'test_textarea';
+        document.body.appendChild(textarea);
+        var text = 'The quick brown fox jumped over the lazy dog.\n' +
+            'She sells sea shells by the sea shore.';
+        textarea.value = text;
+        textarea.focus();
+        // IE and Opera instantly convert \n into \r\n.  Gecko and Webkit don't.
+        text = textarea.value;
+        var linebreak = '\n';
+        if (textarea.value.indexOf('\r\n') != -1) {
+          linebreak = '\r\n';
+        }
+        var share = new mobwrite.shareTextareaObj(textarea);
+
+        // Fabricate a collapsed cursor right before 'shore'.
+        var cursor0 = {};
+        cursor0.startPrefix = 'ells by the sea ';
+        cursor0.startSuffix = 'shore.';
+        cursor0.startPercent = (77 + linebreak.length) / text.length;
+        cursor0.collapsed = true;
+        share.restoreCursor_(cursor0);
+
+        // Check the captured cursor is the same as the fabricated cursor.
+        var cursor1 = share.captureCursor_();
+        assertEquals(cursor0.startPrefix, cursor1.startPrefix);
+        assertEquals(cursor0.startSuffix, cursor1.startSuffix);
+        assertEquals(cursor0.startPercent, cursor1.startPercent);
+        assertEquals(cursor0.collapsed, cursor1.collapsed);
+
+        // Fabricate a selection running from 'lazy' to 'sells' inclusive.
+        cursor0 = {};
+        cursor0.startPrefix = 'jumped over the ';
+        cursor0.startSuffix = 'lazy dog.' + linebreak + 'She se';
+        cursor0.startSuffix = cursor0.startSuffix.substring(0, 16);
+        cursor0.startPercent = 36 / text.length;
+        cursor0.endPrefix = 'y dog.' + linebreak + 'She sells';
+        cursor0.endPrefix = cursor0.endPrefix
+            .substring(cursor0.endPrefix.length - 16);
+        cursor0.endSuffix = ' sea shells by t';
+        cursor0.endPercent = (54 + linebreak.length) / text.length;
+        cursor0.collapsed = false;
+        share.restoreCursor_(cursor0);
+
+        // Check the captured cursor is the same as the fabricated cursor.
+        cursor1 = share.captureCursor_();
+        assertEquals(cursor0.startPrefix, cursor1.startPrefix);
+        assertEquals(cursor0.startSuffix, cursor1.startSuffix);
+        assertEquals(cursor0.startPercent, cursor1.startPercent);
+        assertEquals(cursor0.endPrefix, cursor1.endPrefix);
+        assertEquals(cursor0.endSuffix, cursor1.endSuffix);
+        assertEquals(cursor0.endPercent, cursor1.endPercent);
+        assertEquals(cursor0.collapsed, cursor1.collapsed);
+
+        // Tweak locations and verify fuzzy match.
+        cursor1.startPrefix = 'jumped under the ';
+        cursor1.startSuffix = 'crazy cats.\tShe';
+        cursor1.endPercent = 60 / text.length;
+        share.restoreCursor_(cursor1);
+        var cursor2 = share.captureCursor_();
+        assertEquals(cursor0.startPrefix, cursor2.startPrefix);
+        assertEquals(cursor0.startSuffix, cursor2.startSuffix);
+        assertEquals(cursor0.startPercent, cursor2.startPercent);
+        assertEquals(cursor0.endPrefix, cursor2.endPrefix);
+        assertEquals(cursor0.endSuffix, cursor2.endSuffix);
+        assertEquals(cursor0.endPercent, cursor2.endPercent);
+        assertEquals(cursor0.collapsed, cursor2.collapsed);
+
+        // Tear down the text area.
+        document.body.removeChild(textarea);
+      }
+
+
+      function testMergeType() {
+        // Create a text input.
+        var input = document.createElement('input');
+        input.id = 'test_input';
+        document.body.appendChild(input);
+        var share = new mobwrite.shareTextareaObj(input);
+
+        // Check that text will merge.
+        input.value = '12Hello34';
+        share.getClientText();
+        assertEquals(true, share.mergeChanges);
+
+        // Check that numbers will not merge.
+        input.value = ' 12,345.67 ';
+        share.getClientText();
+        assertEquals(false, share.mergeChanges);
+
+        // Tear down the text input.
+        document.body.removeChild(input);
+      }
+
+
+      // IFRAME TEST FUNCTIONS
+
+
+      function testSpaceToNbsp() {
+        assertEquals('Hello world!', mobwrite.shareIframeObj.spaceToNbsp_('Hello world!'));
+        assertEquals('x\u00A0 \u00A0 \u00A0 y', mobwrite.shareIframeObj.spaceToNbsp_('x      y'));
+        assertEquals('x\u00A0 \u00A0 \u00A0\u00A0', mobwrite.shareIframeObj.spaceToNbsp_('x      '));
+        assertEquals('\u00A0 \u00A0 \u00A0 y', mobwrite.shareIframeObj.spaceToNbsp_('      y'));
+        assertEquals('\u00A0 a\u00A0\u00A0\n\u00A0 b\u00A0\u00A0\n\u00A0 c\u00A0\u00A0',
+            mobwrite.shareIframeObj.spaceToNbsp_('  a  \n  b  \n  c  '));
+        assertEquals('\u00A0 \u00A0 \u00A0\u00A0', mobwrite.shareIframeObj.spaceToNbsp_('      '));
+      }
+      
+
+      function testWalk() {
+        /*
+        <BODY>
+          <SPAN>start<I>italic</I></SPAN>
+          <P></P>
+          <DIV><HR><BR>end</DIV>
+        </BODY>
+        */
+        var body = document.createElement('BODY');
+        var span = document.createElement('SPAN');
+        var i = document.createElement('I');
+        var div = document.createElement('DIV');
+        var p = document.createElement('P');
+        var hr = document.createElement('HR');
+        var br = document.createElement('BR');
+        var textStart = document.createTextNode('start')
+        var textItalic = document.createTextNode('italic')
+        var textEnd = document.createTextNode('end')
+        body.appendChild(span);
+        span.appendChild(textStart);
+        span.appendChild(i);
+        i.appendChild(textItalic);
+        body.appendChild(p);
+        body.appendChild(div);
+        div.appendChild(hr);
+        div.appendChild(br);
+        div.appendChild(textEnd);
+
+        assertEquals('BODY->SPAN', span, mobwrite.shareIframeObj.walkDown_(body));
+        assertEquals('SPAN->"start"', textStart, mobwrite.shareIframeObj.walkDown_(span));
+        assertEquals('"start"->I', i, mobwrite.shareIframeObj.walkDown_(textStart));
+        assertEquals('I->"italic"', textItalic, mobwrite.shareIframeObj.walkDown_(i));
+        assertEquals('"italic"->P', p, mobwrite.shareIframeObj.walkDown_(textItalic));
+        assertEquals('P->DIV', div, mobwrite.shareIframeObj.walkDown_(p));
+        assertEquals('DIV->HR', hr, mobwrite.shareIframeObj.walkDown_(div));
+        assertEquals('HR->BR', br, mobwrite.shareIframeObj.walkDown_(hr));
+        assertEquals('BR->"end"', textEnd, mobwrite.shareIframeObj.walkDown_(br));
+        assertEquals('"end"->null', null, mobwrite.shareIframeObj.walkDown_(textEnd));
+
+        assertEquals('BR<-"end"', br, mobwrite.shareIframeObj.walkUp_(textEnd));
+        assertEquals('HR<-BR', hr, mobwrite.shareIframeObj.walkUp_(br));
+        assertEquals('DIV<-HR', div, mobwrite.shareIframeObj.walkUp_(hr));
+        assertEquals('P<-DIV', p, mobwrite.shareIframeObj.walkUp_(div));
+        assertEquals('"italic"<-P', textItalic, mobwrite.shareIframeObj.walkUp_(p));
+        assertEquals('I<-"italic"', i, mobwrite.shareIframeObj.walkUp_(textItalic));
+        assertEquals('"start"<-I', textStart, mobwrite.shareIframeObj.walkUp_(i));
+        assertEquals('SPAN<-"start"', span, mobwrite.shareIframeObj.walkUp_(textStart));
+        assertEquals('BODY<-SPAN', body, mobwrite.shareIframeObj.walkUp_(span));
+        assertEquals('null<-BODY', null, mobwrite.shareIframeObj.walkUp_(body));
+      }
+
+
+      function testDomNull() {
+        var body = document.createElement('body');
+        assertEquals('', mobwrite.shareIframeObj.domToText_(body));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(body));
+        assertEquals('0->BODY', body, mobwrite.shareIframeObj.followMapDom_(body, 0));
+        assertEquals('99->BODY', body, mobwrite.shareIframeObj.followMapDom_(body, 99));
+        assertEquivalent([body, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([body, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 99));
+      }
+
+
+      function testDomPlain() {
+        var body = document.createElement('body');
+        body.innerHTML = 'plain text';
+        assertEquals('plain text', mobwrite.shareIframeObj.domToText_(body));
+        var text1 = body.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(body));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals('0->"plain text"', text1, mobwrite.shareIframeObj.followMapDom_(body, 0));
+        assertEquals('1->"plain text"', text1, mobwrite.shareIframeObj.followMapDom_(body, 1));
+        assertEquals('99->"plain text"', text1, mobwrite.shareIframeObj.followMapDom_(body, 99));
+        assertEquivalent([text1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 3], mobwrite.shareIframeObj.findNodeOffset_(body, 3));
+        assertEquivalent([text1, 10], mobwrite.shareIframeObj.findNodeOffset_(body, 99));
+      }
+
+
+      function testDomSimple() {
+        var body = document.createElement('body');
+        body.innerHTML = '<I>italics <B>bold <U>underline</U></B></I>';
+        assertEquals('italics bold underline', mobwrite.shareIframeObj.domToText_(body));
+        var i = body.lastChild;
+        var text1 = i.firstChild;
+        var b = i.lastChild;
+        var text2 = b.firstChild;
+        var u = b.lastChild;
+        var text3 = u.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(i));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(b));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquals(13, mobwrite.shareIframeObj.getCharIndex_(u));
+        assertEquals(13, mobwrite.shareIframeObj.getCharIndex_(text3));
+        assertEquals('0->I', i, mobwrite.shareIframeObj.followMapDom_(body, 0));
+        assertEquals('1->"italics "', text1, mobwrite.shareIframeObj.followMapDom_(body, 1));
+        assertEquals('8->"italics "', text1, mobwrite.shareIframeObj.followMapDom_(body, 8));
+        assertEquals('9->"bold "', text2, mobwrite.shareIframeObj.followMapDom_(body, 9));
+        assertEquals('13->"bold "', text2, mobwrite.shareIframeObj.followMapDom_(body, 13));
+        assertEquals('14->"underline"', text3, mobwrite.shareIframeObj.followMapDom_(body, 14));
+        assertEquals('99->"underline"', text3, mobwrite.shareIframeObj.followMapDom_(body, 99));
+        assertEquivalent([i, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 2], mobwrite.shareIframeObj.findNodeOffset_(body, 2));
+        assertEquivalent([text2, 2], mobwrite.shareIframeObj.findNodeOffset_(body, 10));
+        assertEquivalent([text3, 2], mobwrite.shareIframeObj.findNodeOffset_(body, 15));
+        assertEquivalent([text3, 9], mobwrite.shareIframeObj.findNodeOffset_(body, 99));
+      }
+
+
+      function testDomBrs() {
+        var body = document.createElement('body');
+        body.innerHTML = 'one-br<BR>two-br-br<BR><BR>three';
+        assertEquals('one-br\ntwo-br-br\n\nthree', mobwrite.shareIframeObj.domToText_(body));
+        var text1 = body.childNodes[0];
+        var br1 = body.childNodes[1];
+        var text2 = body.childNodes[2];
+        var br2 = body.childNodes[3];
+        var br3 = body.childNodes[4];
+        var text3 = body.childNodes[5];
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquals(16, mobwrite.shareIframeObj.getCharIndex_(br2));
+        assertEquals(17, mobwrite.shareIframeObj.getCharIndex_(br3));
+        assertEquals(18, mobwrite.shareIframeObj.getCharIndex_(text3));
+        assertEquals('1->"one-br"', text1, mobwrite.shareIframeObj.followMapDom_(body, 1));
+        assertEquals('6->"one-br"', text1, mobwrite.shareIframeObj.followMapDom_(body, 6));
+        assertEquals('7->"two-br-br"', text2, mobwrite.shareIframeObj.followMapDom_(body, 7));
+        assertEquals('16->"two-br-br"', text2, mobwrite.shareIframeObj.followMapDom_(body, 16));
+        assertEquals('17->BR3', br3, mobwrite.shareIframeObj.followMapDom_(body, 17));
+        assertEquals('18->"three"', text3, mobwrite.shareIframeObj.followMapDom_(body, 18));
+        assertEquivalent([text1, 6], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+        assertEquivalent([text2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([text2, 9], mobwrite.shareIframeObj.findNodeOffset_(body, 16));
+        assertEquivalent([br3, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 17));
+        assertEquivalent([text3, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 18));
+      }
+
+
+      function testDomP() {
+        var body = document.createElement('body');
+        body.innerHTML = '<P>para</P>';
+        assertEquals('para', mobwrite.shareIframeObj.domToText_(body));
+        var p1 = body.firstChild;
+        var text1 = p1.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 3], mobwrite.shareIframeObj.findNodeOffset_(body, 3));
+        assertEquivalent([text1, 4], mobwrite.shareIframeObj.findNodeOffset_(body, 4));
+        assertEquivalent([text1, 4], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+      }
+
+
+      function testDomPs() {
+        var body = document.createElement('body');
+        body.innerHTML = '<P>para1</P><P>para2</P>';
+        assertEquals('para1\npara2', mobwrite.shareIframeObj.domToText_(body));
+        var p1 = body.firstChild;
+        var text1 = p1.firstChild;
+        var p2 = body.lastChild;
+        var text2 = p2.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(p2));
+        assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 5], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+        assertEquivalent([p2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([text2, 5], mobwrite.shareIframeObj.findNodeOffset_(body, 99));
+      }
+
+
+      function testDomEmptyDiv() {
+        var body = document.createElement('body');
+        body.innerHTML = '<DIV>div1</DIV><DIV></DIV><DIV>div3</DIV>';
+        // Empty DIV disappears.
+        assertEquals('div1\ndiv3', mobwrite.shareIframeObj.domToText_(body));
+        var div1 = body.childNodes[0];
+        var text1 = div1.firstChild;
+        var div2 = body.childNodes[1];
+        var div3 = body.childNodes[2];
+        var text2 = div3.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(div1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(4, mobwrite.shareIframeObj.getCharIndex_(div2));
+        assertEquals(4, mobwrite.shareIframeObj.getCharIndex_(div3));
+        assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquivalent([div1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 4], mobwrite.shareIframeObj.findNodeOffset_(body, 4));
+        assertEquivalent([div2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+      }
+
+
+      function testDomEmptyPs() {
+        var body = document.createElement('body');
+        body.innerHTML = '<P>para1</P><P></P><P>para3</P>';
+        // Empty P disappears.
+        // IE renders this differently from other browsers, so convert as seen locally.
+        if (mobwrite.UA_msie) {
+          assertEquals('para1\n\npara3', mobwrite.shareIframeObj.domToText_(body));
+        } else {
+          assertEquals('para1\npara3', mobwrite.shareIframeObj.domToText_(body));
+        }
+        var p1 = body.childNodes[0];
+        var text1 = p1.firstChild;
+        var p2 = body.childNodes[1];
+        var p3 = body.childNodes[2];
+        var text2 = p3.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(p2));
+        if (mobwrite.UA_msie) {
+          assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(p3));
+          assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(text2));
+        } else {
+          assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(p3));
+          assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(text2));
+        }
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 5], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+        assertEquivalent([p2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+        if (mobwrite.UA_msie) {
+          assertEquivalent([p3, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+          assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+        } else {
+          assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+          assertEquivalent([text2, 2], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+        }
+      }
+
+
+      function testDomBrInP() {
+        var body = document.createElement('body');
+        // BR in P. (inserts break)
+        body.innerHTML = '<P>para1</P><P><BR></P><P>para3</P>';
+        assertEquals('para1\n\npara3', mobwrite.shareIframeObj.domToText_(body));
+        var p1 = body.childNodes[0];
+        var text1 = p1.firstChild;
+        var p2 = body.childNodes[1];
+        var br1 = p2.firstChild;
+        var p3 = body.childNodes[2];
+        var text2 = p3.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(p2));
+        assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(p3));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 5], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+        assertEquivalent([p2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+        assertEquivalent([p3, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+      }
+
+
+      function testDomBrEndP() {
+        var body = document.createElement('body');
+        // BR at end of P. (does not insert break)
+        body.innerHTML = '<P>para-br<BR></P><P>para</P>';
+        assertEquals('para-br\npara', mobwrite.shareIframeObj.domToText_(body));
+        var p1 = body.firstChild;
+        var text1 = p1.firstChild;
+        var br1 = p1.lastChild;
+        var p2 = body.lastChild;
+        var text2 = p2.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(p2));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquals('7->"para-br"', text1, mobwrite.shareIframeObj.followMapDom_(body, 7));
+        assertEquals('8->P', p2, mobwrite.shareIframeObj.followMapDom_(body, 8));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 7], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([p2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 9));
+      }
+
+
+      function testDomBrStartP() {
+        var body = document.createElement('body');
+        // BR at start of P. (inserts break)
+        body.innerHTML = '<P>para</P><P><BR>br-para</P>';
+        assertEquals('para\n\nbr-para', mobwrite.shareIframeObj.domToText_(body));
+        var p1 = body.firstChild;
+        var text1 = p1.firstChild;
+        var p2 = body.lastChild;
+        var br1 = p2.firstChild;
+        var text2 = p2.lastChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(4, mobwrite.shareIframeObj.getCharIndex_(p2));
+        assertEquals(5, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(6, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 4], mobwrite.shareIframeObj.findNodeOffset_(body, 4));
+        assertEquivalent([p2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 5));
+        assertEquivalent([text2, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 6));
+      }
+
+
+      function testDomSpanBrP() {
+        var body = document.createElement('body');
+        // BR before P. (does not insert break)
+        body.innerHTML = '<SPAN>span-br<BR></SPAN><P>para</P>';
+        assertEquals('span-br\npara', mobwrite.shareIframeObj.domToText_(body));
+        var span1 = body.firstChild;
+        var text1 = span1.firstChild;
+        var br1 = span1.lastChild;
+        var p1 = body.lastChild;
+        var text2 = p1.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(span1));
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquals('7->"span-br"', text1, mobwrite.shareIframeObj.followMapDom_(body, 7));
+        assertEquals('8->P', p1, mobwrite.shareIframeObj.followMapDom_(body, 8));
+        assertEquivalent([span1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 7], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 9));
+      }
+
+
+      function testDomBrP() {
+        var body = document.createElement('body');
+        // BR before P. (does not insert break)
+        body.innerHTML = 'text-br<BR><P>para</P>';
+        assertEquals('text-br\npara', mobwrite.shareIframeObj.domToText_(body));
+        var text1 = body.childNodes[0];
+        var br1 = body.childNodes[1];
+        var p1 = body.childNodes[2];
+        var text2 = p1.firstChild;
+        assertEquals(0, mobwrite.shareIframeObj.getCharIndex_(text1));
+        assertEquals(7, mobwrite.shareIframeObj.getCharIndex_(br1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(p1));
+        assertEquals(8, mobwrite.shareIframeObj.getCharIndex_(text2));
+        assertEquivalent([text1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 0));
+        assertEquivalent([text1, 7], mobwrite.shareIframeObj.findNodeOffset_(body, 7));
+        assertEquivalent([p1, 0], mobwrite.shareIframeObj.findNodeOffset_(body, 8));
+        assertEquivalent([text2, 1], mobwrite.shareIframeObj.findNodeOffset_(body, 9));
+      }
+
+
+      function runTests() {
+        var tests = ['testUniqueId',
+            'testNormalizeLinebreaks', 'testCursor', 'testMergeType',
+            'testSpaceToNbsp', 'testWalk', 'testDomNull', 'testDomPlain',
+            'testDomSimple', 'testDomBrs', 'testDomP', 'testDomPs',
+            'testDomEmptyDiv', 'testDomEmptyPs', 'testDomBrInP',
+            'testDomBrEndP', 'testDomBrStartP', 'testDomSpanBrP', 'testDomBrP'];
+        for (var x = 0; x < tests.length; x++) {
+          document.write('<H3>' + tests[x] + ':</H3>');
+          eval(tests[x] + '()');
+        }
+      }
+
+    </script>
+  </head>
+  <body>
+    <H1>Test Harness for MobWrite Client</H1>
+
+    <P>If debugging errors, start with the first reported error,
+    subsequent tests often rely on earlier ones.</P>
+
+    <script type="text/javascript"><!--
+      var start_time = (new Date()).getTime();
+      runTests();
+      var end_time = (new Date()).getTime();
+      document.write('<H3>Done.</H3>');
+      document.write('<P>Tests passed: ' + test_good + '<BR>Tests failed: ' + test_bad + '</P>');
+      document.write('<P>Total time: ' + (end_time - start_time) + ' ms</P>');
+    //--></script>
+
+  </body>
+</html>
+
