@@ -1,0 +1,65 @@
+HTML {
+  background-color: #eef;
+}
+
+BODY {
+  background-color: white;
+  font-family: sans-serif;
+  padding: 10px 10px 25px 10px;
+  border: 1px #eef dotted;
+  margin: 10px 20px;
+}
+
+A:hover {
+  color: red
+}
+
+A>IMG {
+  border: 2px solid;
+}
+
+.leftside {
+  float: left;
+  margin-right: 5px;
+}
+.rightside {
+  float: right;
+  margin-left: 5px;
+}
+
+DIV.yada {
+  font-size: small;
+  font-style: italic;
+  padding-bottom: 8px;
+}
+DIV.nav {
+  float: left;
+  font-style: italic;
+  margin-right: 5px;
+}
+DIV.lmb {
+  float: right;
+  font-style: italic;
+  margin-left: 5px;
+  margin-bottom: 10px;
+}
+
+DIV.icon {
+  width: 36px;
+  float: left;
+  border: 0;
+}
+DIV.desc {
+  float: left;
+}
+DIV.sep {
+  clear: left;
+}
+
+H1, H2, H3 {
+  font-weight: normal;
+}
+
+ACRONYM, ABBR {
+  cursor: help;
+}

@@ -1,0 +1,2385 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+<html lang="en"><head>
+  <title>Neil Fraser: Writing: Diff Strategies</title>
+  <link href="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/homepage.css" rel="stylesheet" type="text/css">
+  <link href="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/homepage.css" rel="stylesheet" type="text/css">
+  <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+  <link rel="icon" href="https://neil.fraser.name/favicon.ico" type="image/x-ico">
+  <link rel="SHORTCUT ICON" href="https://neil.fraser.name/favicon.ico">
+  <meta name="keywords" content="Neil Fraser">
+  <link rel="start" href="https://neil.fraser.name/" title="Neil Fraser's Homepage">
+  <link rel="up" href="https://neil.fraser.name/writing/" title="Neil's Writing">
+  <style>
+    ins {background-color: rgb(230, 255, 230)}
+    del {background-color: rgb(255, 230, 230)}
+  </style>
+</head>
+
+<body>
+<script>
+var steps = 10;
+
+function show(name, section) {
+  // Syntax highlight this entry if it hasn't been highlighted before.
+  var textarea = document.getElementById(name + section + '_');
+  if (textarea) {
+    textarea.name = textarea.id;
+    dp.SyntaxHighlighter.HighlightAll(name + section + '_');
+    textarea.name = '';
+    textarea.id = '';
+  }
+
+  document.getElementById(name).style.display = 'none';
+  var element = document.getElementById(name + section);
+  element.style.display = 'block';
+  openStep(element.offsetHeight / steps, steps, name + section);
+}
+
+function openStep(dh, n, id) {
+  // Increase the size of the block by dh.
+  var element = document.getElementById(id);
+  if (n == 0) {
+    // Last call.
+    element.style.overflow = 'visible';
+    element.style.height = 'auto';
+  } else if (n == steps) {
+    // First call.
+    element.style.overflow = 'hidden';
+    element.style.height = '0px';
+  } else {
+    element.style.height = (parseInt(element.style.height, 10) + dh) + 'px';
+  }
+  // Call myself again in a split second.
+  if (n > 0) {
+    window.setTimeout('openStep(' + dh + ', ' + (n - 1) + ', "' + id + '")', 300 / steps);
+  }
+}
+
+function hide(name, section) {
+  var oldTop = document.body.scrollTop || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop);
+  var element = document.getElementById(name + section);
+  var newTop = -100;
+  var elementParent = element;
+  while (elementParent) {
+    newTop += elementParent.offsetTop;
+    elementParent = elementParent.offsetParent;
+  }
+  var scrollY = 0;
+  if (newTop && oldTop && oldTop > newTop + 100) {
+    scrollY = (newTop - oldTop) / steps;
+  }
+  closeStep(oldTop, scrollY, element.offsetHeight / steps, steps, name, section);
+}
+
+function closeStep(y, dy, dh, n, name, section) {
+  // Scroll the scrollbar up by dy.
+  if (dy) {
+    if (n <= 1) {
+      y += dy / 2; // Slight deceleration
+    } else {
+      y += dy;
+    }
+    window.scrollTo(0, y);
+  }
+  // Decrease the size of the section by dh.
+  var element = document.getElementById(name + section);
+  if (n == 0) {
+    // Last call.
+    element.style.display = 'none';
+    element.style.overflow = 'visible';
+    element.style.height = 'auto';
+    document.getElementById(name).style.display = 'block';
+  } else if (n == steps) {
+    // First call.
+    element.style.overflow = 'hidden';
+    element.style.height = (element.offsetHeight - dh) + 'px';
+  } else {
+    element.style.height = (parseInt(element.style.height, 10) - dh) + 'px';
+  }
+  // Call myself again in a split second.
+  if (n > 0) {
+    window.setTimeout('closeStep(' + y + ', ' + dy + ', ' + dh + ', ' + (n - 1) + ', "' + name + '", "' + section + '")', 300 / steps);
+  }
+}
+</script>
+
+<h1>Diff Strategies</h1>
+<p><i>by Neil Fraser, April 2006</i></p>
+
+<p>Computing the differences between two sequences is at the core of 
+many applications.  Below is a simple example of the difference between 
+two texts:</p>
+
+<code>Text 1: Apples are a fruit.<br>
+Text 2: Bananas are also fruit.<br>
+Diff: &nbsp; <del>Apple</del><ins>Banana</ins>s are a<ins>lso</ins> fruit.</code>
+
+<p>This paper surveys the literature on difference algorithms, compares 
+them, and describes several techniques for improving the usability of 
+these algorithms in practice.  In particular, it discusses 
+pre-processing optimisations, strategies for selecting the best 
+difference algorithm for the job, and post-processing cleanup.</p>
+
+<hr>
+<h2>1 &nbsp; Pre-processing Optimisations</h2>
+
+<p>Even the best-known difference algorithms are computationally 
+expensive processes.  In most real-world instances, the two sequences 
+(usually text) being compared are similar to each other to a certain 
+extent.  This observation enables several optimisations that can improve
+ the actual running time of an algorithm, and in certain cases, that can
+ even obviate the need for running the algorithm altogether.</p>
+
+<h3>1.1 &nbsp; Equality</h3>
+
+<p>The most obvious and the simplest optimisation is the equality test. 
+ Since there is a non-trivial chance that the two sequences are 
+identical, and the test for this case is so trivial, it is logical to 
+test for this case first.  One side effect of this test is that it may 
+simplify subsequent code. After this test, there is guaranteed to be a 
+difference; the null case is eliminated.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code1"><button onclick="show('code1', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code1', 'b')">Show Java</button> &nbsp; <button onclick="show('code1', 'c')">Show Python</button></div>
+<div id="code1a" style="display: none">
+<textarea id="code1a_" class="javascript">if (text1 == text2)
+  return null;</textarea>
+<div><button onclick="hide('code1', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code1b" style="display: none">
+<textarea id="code1b_" class="java">if (text1.equals(text2))
+  return null;</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code1', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code1c" style="display: none">
+<textarea id="code1c_" class="python">if text1 == text2:
+  return None</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code1', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<h3>1.2 &nbsp; Common Prefix/Suffix</h3>
+
+<p>If there is any commonality at all between the texts, it is likely 
+that they will share a common substring at the start and/or the end.</p>
+
+<code>Text 1: The cat in the hat.<br>
+Text 2: The dog in the hat.</code>
+
+<p>This can be simplified down to:</p>
+
+<code>Text 1: cat<br>
+Text 2: dog</code>
+
+<p>Locating these common substrings can be done in O(log n) using a binary search. Since binary searches
+are least efficient at their extreme points and it is not uncommon in the real-world to have zero commonality,
+it makes sense to do a quick check of the first (or last) character before starting the search.</p>
+
+<p><small>(This section generates a lot of email. The issue is that string equality operations (a == b) are
+typically O(n), thus the described algorithm would be O(n log n).  However, when dealing with high level languages,
+the speed difference between loops and equality operations is such that for all practical purposes the equality
+opeation can be considered to be O(1).  Further complicating the matter are languages like Python which
+use hash tables for all strings, thus making equality checking be O(1) and string creation be O(n).  For more information,
+see the <a href="https://neil.fraser.name/news/2007/10/09/">performance testing</a>.)</small></p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code2"><button onclick="show('code2', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code2', 'b')">Show Java</button> &nbsp; <button onclick="show('code2', 'c')">Show Python</button></div>
+<div id="code2a" style="display: none">
+<textarea id="code2a_" class="javascript">function diff_commonPrefix(text1, text2) {
+  // Quick check for common null cases.
+  if (!text1 || !text2 || text1.charCodeAt(0) !== text2.charCodeAt(0)) {
+    return 0;
+  }
+  // Binary search.
+  var pointermin = 0;
+  var pointermax = Math.min(text1.length, text2.length);
+  var pointermid = pointermax;
+  var pointerstart = 0;
+  while (pointermin &lt; pointermid) {
+    if (text1.substring(pointerstart, pointermid) ==
+        text2.substring(pointerstart, pointermid)) {
+      pointermin = pointermid;
+      pointerstart = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+}
+
+function diff_commonSuffix(text1, text2) {
+  // Quick check for common null cases.
+  if (!text1 || !text2 || text1.charCodeAt(text1.length - 1) !==
+                          text2.charCodeAt(text2.length - 1)) {
+    return 0;
+  }
+  // Binary search.
+  var pointermin = 0;
+  var pointermax = Math.min(text1.length, text2.length);
+  var pointermid = pointermax;
+  var pointerend = 0;
+  while (pointermin &lt; pointermid) {
+    if (text1.substring(text1.length - pointermid, text1.length - pointerend) ==
+        text2.substring(text2.length - pointermid, text2.length - pointerend)) {
+      pointermin = pointermid;
+      pointerend = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+}</textarea>
+<div><button onclick="hide('code2', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code2b" style="display: none">
+<textarea id="code2b_" class="java">public int diff_commonPrefix(String text1, String text2) {
+  // Quick check for common null cases.
+  if (text1.length() == 0 || text2.length() == 0 ||
+      text1.charAt(0) != text2.charAt(0)) {
+    return 0;
+  }
+  // Binary search.
+  int pointermin = 0;
+  int pointermax = Math.min(text1.length(), text2.length());
+  int pointermid = pointermax;
+  int pointerstart = 0;
+  while (pointermin &lt; pointermid) {
+    if (text1.regionMatches(pointerstart, text2, pointerstart,
+        pointermid - pointerstart)) {
+      pointermin = pointermid;
+      pointerstart = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = (pointermax - pointermin) / 2 + pointermin;
+  }
+  return pointermid;
+}
+
+public int diff_commonSuffix(String text1, String text2) {
+  // Quick check for common null cases.
+  if (text1.length() == 0 || text2.length() == 0 ||
+      text1.charAt(text1.length() - 1) != text2.charAt(text2.length() - 1)) {
+    return 0;
+  }
+  // Binary search.
+  int pointermin = 0;
+  int pointermax = Math.min(text1.length(), text2.length());
+  int pointermid = pointermax;
+  int pointerend = 0;
+  while (pointermin &lt; pointermid) {
+    if (text1.regionMatches(text1.length() - pointermid, text2,
+                            text2.length() - pointermid,
+                            pointermid - pointerend)) {
+      pointermin = pointermid;
+      pointerend = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = (pointermax - pointermin) / 2 + pointermin;
+  }
+  return pointermid;
+}</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code2', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code2c" style="display: none">
+<textarea id="code2c_" class="python">def diff_commonPrefix(text1, text2):
+  # Quick check for common null cases.
+  if not text1 or not text2 or text1[0] != text2[0]:
+    return 0
+  # Binary search.
+  pointermin = 0
+  pointermax = min(len(text1), len(text2))
+  pointermid = pointermax
+  pointerstart = 0
+  while pointermin &lt; pointermid:
+    if text1[pointerstart:pointermid] == text2[pointerstart:pointermid]:
+      pointermin = pointermid
+      pointerstart = pointermin
+    else:
+      pointermax = pointermid
+    pointermid = int((pointermax - pointermin) / 2 + pointermin)
+  return pointermid
+
+def diff_commonSuffix(text1, text2):
+  # Quick check for common null cases.
+  if not text1 or not text2 or text1[-1] != text2[-1]:
+    return 0
+  # Binary search.
+  pointermin = 0
+  pointermax = min(len(text1), len(text2))
+  pointermid = pointermax
+  pointerend = 0
+  while pointermin &lt; pointermid:
+    if (text1[-pointermid:len(text1) - pointerend] ==
+        text2[-pointermid:len(text2) - pointerend]):
+      pointermin = pointermid
+      pointerend = pointermin
+    else:
+      pointermax = pointermid
+    pointermid = int((pointermax - pointermin) / 2 + pointermin)
+  return pointermid</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code2', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<p>The GNU diff program (which does linear matching for prefixes and suffixes) <a href="http://www.gnu.org/software/diffutils/manual/html_node/diff-Performance.html">claims</a>
+ in their documentation that "occasionally [prefix &amp; suffix 
+stripping] may produce non-minimal output", though they do not provide 
+an example of this.</p>
+
+<h3>1.3 &nbsp; Singular Insertion/Deletion</h3>
+
+<p>A very common difference is the insertion or the deletion of some text:</p>
+
+<code>Text 1: The cat in the hat. &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Text 1: The cat in the hat.<br>
+Text 2: The furry cat in the hat. &nbsp; &nbsp; &nbsp; | Text 2: The cat.</code>
+
+<p>After removing the common prefixes and suffixes one gets:</p>
+
+<code>Text 1: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Text 1: 
+&nbsp;in the hat<br>
+Text 2: furry &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; |  Text 2:&nbsp;</code>
+
+<p>The presence of an empty 'Text 1' in the first example indicates that
+ 'Text 2' is an insertion. The presence of an empty 'Text 2' in the 
+second example indicates that 'Text 1' is a deletion. Detecting these 
+common cases avoids the need to run a difference algorithm at all.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code3"><button onclick="show('code3', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code3', 'b')">Show Java</button> &nbsp; <button onclick="show('code3', 'c')">Show Python</button></div>
+<div id="code3a" style="display: none">
+<textarea id="code3a_" class="javascript">if (!text1) {
+  // Just add some text.
+  return [[DIFF_INSERT, text2]];
+}
+if (!text2) {
+  // Just delete some text.
+  return [[DIFF_DELETE, text1]];
+}</textarea>
+<p>In this and subsequent examples, the internal format for representing
+ a set of differences is an array of tuples.  The first element of each 
+tuple specifies if it is an <ins>insertion</ins> (DIFF_INSERT), a <del>deletion</del> (DIFF_DELETE) or an equality (DIFF_EQUAL).  The second element specifies the affected text.</p>
+<div><button onclick="hide('code3', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code3b" style="display: none">
+<textarea id="code3b_" class="java">LinkedList&lt;Diff&gt; diffs = new LinkedList&lt;Diff&gt;();
+if (text1.length() == 0) {
+  // Just add some text.
+  diffs.add(new Diff(Operation.INSERT, text2));
+  return diffs;
+}
+if (text2.length() == 0) {
+  // Just delete some text.
+  diffs.add(new Diff(Operation.DELETE, text1));
+  return diffs;
+}</textarea>
+<p>In this and subsequent examples, the internal format for representing
+ a set of differences is a linked list of Diff objects.  The 'operation'
+ property on a Diff object specifies if it is an <ins>insertion</ins> (INSERT), a <del>deletion</del> (DELETE) or an equality (EQUAL).  The 'text' property on a Diff object specifies the affected text.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code3', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code3c" style="display: none">
+<textarea id="code3c_" class="python">if not text1:
+  # Just add some text.
+  return [(DIFF_INSERT, text2)]
+if not text2:
+  # Just delete some text.
+  return [(DIFF_DELETE, text1)]</textarea>
+<p>In this and subsequent examples, the internal format for representing
+ a set of differences is a list of tuples.  The first element of each 
+tuple specifies if it is an <ins>insertion</ins> (DIFF_INSERT), a <del>deletion</del> (DIFF_DELETE) or an equality (DIFF_EQUAL).  The second element specifies the affected text.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code3', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<h3>1.4 &nbsp; Two Edits</h3>
+
+<p>Detecting and dealing with two edits is more challenging than 
+singular edits.  Two simple insertions can be detected by looking for 
+the presence of 'Text 1' within 'Text 2'.  Likewise two simple deletions
+ can be detected by looking for the presence of 'Text 2' in 'Text 1'.</p>
+
+<code>
+Text 1: The cat in the hat.<br>
+Text 2: The happy cat in the black hat.</code>
+
+<p>Removing the common prefixes and suffixes as a first step guarantees 
+that there must be differences at each end of the remaining texts.  It 
+is then easy to determine that the shorter string ("cat in the") is 
+present within the longer string ("happy cat in the black").  In these 
+situations the difference may be determined without running a difference
+ algorithm.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code4"><button onclick="show('code4', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code4', 'b')">Show Java</button> &nbsp; <button onclick="show('code4', 'c')">Show Python</button></div>
+<div id="code4a" style="display: none">
+<textarea id="code4a_" class="javascript">var longtext = text1.length &gt; text2.length ? text1 : text2;
+var shorttext = text1.length &gt; text2.length ? text2 : text1;
+var i = longtext.indexOf(shorttext);
+if (i != -1) {
+  // Shorter text is inside the longer text.
+  diffs = [[DIFF_INSERT, longtext.substring(0, i)],
+           [DIFF_EQUAL, shorttext],
+           [DIFF_INSERT, longtext.substring(i + shorttext.length)]];
+  // Swap insertions for deletions if diff is reversed.
+  if (text1.length &gt; text2.length) {
+    diffs[0][0] = diffs[2][0] = DIFF_DELETE;
+  }
+  return diffs;
+}</textarea>
+<div><button onclick="hide('code4', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code4b" style="display: none">
+<textarea id="code4b_" class="java">String longtext = text1.length() &gt; text2.length() ? text1 : text2;
+String shorttext = text1.length() &gt; text2.length() ? text2 : text1;
+int i = longtext.indexOf(shorttext);
+if (i != -1) {
+  // Shorter text is inside the longer text.
+  Operation op = (text1.length() &gt; text2.length()) ?
+                 Operation.DELETE : Operation.INSERT;
+  diffs.add(new Diff(op, longtext.substring(0, i)));
+  diffs.add(new Diff(Operation.EQUAL, shorttext));
+  diffs.add(new Diff(op, longtext.substring(i + shorttext.length())));
+  return diffs;
+}</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code4', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code4c" style="display: none">
+<textarea id="code4c_" class="python">if len(text1) &gt; len(text2):
+  (longtext, shorttext) = (text1, text2)
+else:
+  (shorttext, longtext) = (text1, text2)
+i = longtext.find(shorttext)
+if i != -1:
+  # Shorter text is inside the longer text.
+  diffs = [(DIFF_INSERT, longtext[:i]), (DIFF_EQUAL, shorttext),
+           (DIFF_INSERT, longtext[i + len(shorttext):])]
+  # Swap insertions for deletions if diff is reversed.
+  if len(text1) &gt; len(text2):
+    diffs[0] = (DIFF_DELETE, diffs[0][1])
+    diffs[2] = (DIFF_DELETE, diffs[2][1])
+  return diffs</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code4', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<p>The situation is more complicated if the edits aren't two simple 
+insertions or two simple deletions.  These cases may often be detected 
+if the two edits are separated by considerable text:</p>
+
+<code>Text 1: The cat in the hat.<br>
+Text 2: The ox in the box.</code>
+
+<p>After removing the common prefixes and suffixes one gets:</p>
+
+<code>Text 1: cat in the hat<br>
+Text 2: ox in the box</code>
+
+<p>If a substring exists in both texts which is at least half the length
+ of the longer text, then it is guaranteed to be common. In this case 
+the texts can be split in two, and separate differences carried out:</p>
+
+<code>Text 1: cat &nbsp; &nbsp; | Text 1: hat<br>
+Text 2: ox&nbsp; &nbsp; &nbsp; | Text 2: box</code>
+
+<p>Performing this test recursively may, in general, yield further 
+subdivisions, although there are no such subdivisions in the above 
+example.</p>
+
+<p>Computing the longest common substring is an operation about as 
+complex as computing the difference, which would mean there would be no 
+savings.  However, the limitation that the common substring must be at 
+least half the length of the longer text provides a shortcut.  As the 
+diagram below illustrates, if a common substring of such a length 
+exists, then the second quarter and/or third quarter of the longest 
+string must form part of this substring.</p>
+
+<style>
+td.hl {
+ border: 1px black solid;
+ border-right: 0px;
+ margin: 0px;
+ padding: 0px;
+}
+</style>
+
+<table cellspacing="0" cellpadding="0" border="0">
+<tbody><tr>
+  <td>0</td>
+  <td>¼</td>
+  <td>½</td>
+  <td>¾</td>
+  <td>1</td>
+</tr>
+<tr>
+  <td class="hl"><img src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/1x1.gif" alt="" width="50" height="25"></td>
+  <td class="hl" id="hl_2" style="background: #d44"><img src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/1x1.gif" alt="" width="50" height="25"></td>
+  <td class="hl" id="hl_3"><img src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/1x1.gif" alt="" width="50" height="25"></td>
+  <td class="hl"><img src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/1x1.gif" alt="" width="50" height="25"></td>
+  <td style="border-left: 1px black solid"></td>
+</tr>
+<tr>
+  <td colspan="4" id="hl_td"><img id="hl_bar" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/half-length-arrows.gif" style="position: absolute; left: 30px; cursor: move" onmousedown="beginDrag(event)" width="103" height="29"></td>
+  <td><br>&nbsp; &#8592; <i>Drag the 'half length' bar with your mouse.</i></td>
+</tr>
+</tbody></table><br>
+
+<script>
+var hl_bar = document.getElementById('hl_bar');
+var hl_2 = document.getElementById('hl_2');
+var hl_3 = document.getElementById('hl_3');
+var bg_on = '#d44';
+var bg_off = 'none';
+
+function beginDrag(event) {
+  var x = parseInt(hl_bar.style.left);
+  var deltaX = event.clientX - x;
+  var minx = 0;
+  var obj = document.getElementById('hl_td');
+  while (obj) {
+    minx += obj.offsetLeft;
+    obj = obj.offsetParent;
+  }
+  var maxx = minx + 205 - hl_bar.width;
+
+  document.addEventListener('mousemove', moveHandler, true);
+  document.addEventListener('mouseup', upHandler, true);
+
+  // We've handled this event.  Don't let anybody else see it.
+  event.stopPropagation();
+  event.preventDefault();
+
+  function moveHandler(event) {
+    var x = event.clientX - deltaX;
+    x = Math.max(minx, Math.min(x, maxx));
+    hl_bar.style.left = x + 'px';
+    if (x - minx <= 51)
+      hl_2.style.background = bg_on;
+    else
+      hl_2.style.background = bg_off;
+    if (x - minx >= 51)
+      hl_3.style.background = bg_on;
+    else
+      hl_3.style.background = bg_off;
+    // And don't let anyone else see this event.
+    event.stopPropagation();
+  }
+
+  function upHandler(event) {
+    // Unregister the capturing event handlers
+    document.removeEventListener('mouseup', upHandler, true);
+    document.removeEventListener('mousemove', moveHandler, true);
+    // And don't let the event propagate any further
+    event.stopPropagation();
+  }
+}
+</script>
+
+<p>The smaller text can be searched for matches of these two quarters, 
+and the context of any matches can be compared in both texts by looking 
+for common prefixes and suffixes.  The strings may be split at the 
+location of the longest match which is equal to or greater than the half
+ the length of the longer text.  Due to the problem of repeated strings,
+ all matches of each quarter in the smaller text must be checked, not 
+just the first one which reaches the necessary length.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code5"><button onclick="show('code5', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code5', 'b')">Show Java</button> &nbsp; <button onclick="show('code5', 'c')">Show Python</button></div>
+<div id="code5a" style="display: none">
+<textarea id="code5a_" class="javascript">// Check to see if the problem can be split in two.
+var hm = diff_halfMatch(text1, text2);
+if (hm) {
+  // A half-match was found, sort out the return data.
+  var text1_a = hm[0];
+  var text1_b = hm[1];
+  var text2_a = hm[2];
+  var text2_b = hm[3];
+  var mid_common = hm[4];
+  // Send both pairs off for separate processing.
+  var diffs_a = diff_main(text1_a, text2_a);
+  var diffs_b = diff_main(text1_b, text2_b);
+  // Merge the results.
+  return diffs_a.concat([[DIFF_EQUAL, mid_common]], diffs_b);
+}
+
+function diff_halfMatch(text1, text2) {
+  // Do the two texts share a substring which is at least half the length of the
+  // longer text?
+  var longtext = text1.length &gt; text2.length ? text1 : text2;
+  var shorttext = text1.length &gt; text2.length ? text2 : text1;
+  if (longtext.length &lt; 10 || shorttext.length &lt; 1) {
+    return null;  // Pointless.
+  }
+
+  function diff_halfMatchI(longtext, shorttext, i) {
+    // Start with a 1/4 length substring at position i as a seed.
+    var seed = longtext.substring(i, i + Math.floor(longtext.length / 4));
+    var j = -1;
+    var best_common = '';
+    var best_longtext_a, best_longtext_b, best_shorttext_a, best_shorttext_b;
+    while ((j = shorttext.indexOf(seed, j + 1)) != -1) {
+      var prefixLength = diff_commonPrefix(longtext.substring(i),
+                                           shorttext.substring(j));
+      var suffixLength = diff_commonSuffix(longtext.substring(0, i),
+                                           shorttext.substring(0, j));
+      if (best_common.length &lt; suffixLength + prefixLength) {
+        best_common = shorttext.substring(j - suffixLength, j) +
+            shorttext.substring(j, j + prefixLength);
+        best_longtext_a = longtext.substring(0, i - suffixLength);
+        best_longtext_b = longtext.substring(i + prefixLength);
+        best_shorttext_a = shorttext.substring(0, j - suffixLength);
+        best_shorttext_b = shorttext.substring(j + prefixLength);
+      }
+    }
+    if (best_common.length &gt;= longtext.length / 2) {
+      return [best_longtext_a, best_longtext_b,
+              best_shorttext_a, best_shorttext_b, best_common];
+    } else {
+      return null;
+    }
+  }
+
+  // First check if the second quarter is the seed for a half-match.
+  var hm1 = diff_halfMatchI(longtext, shorttext,
+                             Math.ceil(longtext.length / 4));
+  // Check again based on the third quarter.
+  var hm2 = diff_halfMatchI(longtext, shorttext,
+                             Math.ceil(longtext.length / 2));
+  var hm;
+  if (!hm1 &amp;&amp; !hm2) {
+    return null;
+  } else if (!hm2) {
+    hm = hm1;
+  } else if (!hm1) {
+    hm = hm2;
+  } else {
+    // Both matched.  Select the longest.
+    hm = hm1[4].length &gt; hm2[4].length ? hm1 : hm2;
+  }
+
+  // A half-match was found, sort out the return data.
+  var text1_a, text1_b, text2_a, text2_b;
+  if (text1.length &gt; text2.length) {
+    text1_a = hm[0];
+    text1_b = hm[1];
+    text2_a = hm[2];
+    text2_b = hm[3];
+  } else {
+    text2_a = hm[0];
+    text2_b = hm[1];
+    text1_a = hm[2];
+    text1_b = hm[3];
+  }
+  var mid_common = hm[4];
+  return [text1_a, text1_b, text2_a, text2_b, mid_common];
+}</textarea>
+<p>See earlier code for 'diff_commonPrefix' and 'diff_commonSuffix' functions.</p>
+<div><button onclick="hide('code5', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code5b" style="display: none">
+<textarea id="code5b_" class="java">// Check to see if the problem can be split in two.
+String[] hm = diff_halfMatch(text1, text2);
+if (hm != null) {
+  // A half-match was found, sort out the return data.
+  String text1_a = hm[0];
+  String text1_b = hm[1];
+  String text2_a = hm[2];
+  String text2_b = hm[3];
+  String mid_common = hm[4];
+  // Send both pairs off for separate processing.
+  LinkedList&lt;Diff&gt; diffs_a = diff_main(text1_a, text2_a);
+  LinkedList&lt;Diff&gt; diffs_b = diff_main(text1_b, text2_b);
+  // Merge the results.
+  diffs = diffs_a;
+  diffs.add(new Diff(Operation.EQUAL, mid_common));
+  diffs.addAll(diffs_b);
+  return diffs;
+}
+
+protected String[] diff_halfMatch(String text1, String text2) {
+  // Do the two texts share a substring which is at least half the length of the
+  // longer text?
+  String longtext = text1.length() &gt; text2.length() ? text1 : text2;
+  String shorttext = text1.length() &gt; text2.length() ? text2 : text1;
+  if (longtext.length() &lt; 10 || shorttext.length() &lt; 1) {
+    return null;  // Pointless.
+  }
+
+  // First check if the second quarter is the seed for a half-match.
+  String[] hm1 = diff_halfMatchI(longtext, shorttext,
+                                 (longtext.length() + 3) / 4);
+  // Check again based on the third quarter.
+  String[] hm2 = diff_halfMatchI(longtext, shorttext,
+                                 (longtext.length() + 1) / 2);
+  String[] hm;
+  if (hm1 == null &amp;&amp; hm2 == null) {
+    return null;
+  } else if (hm2 == null) {
+    hm = hm1;
+  } else if (hm1 == null) {
+    hm = hm2;
+  } else {
+    // Both matched.  Select the longest.
+    hm = hm1[4].length() &gt; hm2[4].length() ? hm1 : hm2;
+  }
+
+  // A half-match was found, sort out the return data.
+  if (text1.length() &gt; text2.length()) {
+    return hm;
+    //return new String[]{hm[0], hm[1], hm[2], hm[3], hm[4]};
+  } else {
+    return new String[]{hm[2], hm[3], hm[0], hm[1], hm[4]};
+  }
+}
+
+private String[] diff_halfMatchI(String longtext, String shorttext, int i) {
+  // Start with a 1/4 length substring at position i as a seed.
+  String seed = longtext.substring(i, i + longtext.length() / 4);
+  int j = -1;
+  String best_common = "";
+  String best_longtext_a = "", best_longtext_b = "";
+  String best_shorttext_a = "", best_shorttext_b = "";
+  while ((j = shorttext.indexOf(seed, j + 1)) != -1) {
+    int prefixLength = diff_commonPrefix(longtext.substring(i),
+                                         shorttext.substring(j));
+    int suffixLength = diff_commonSuffix(longtext.substring(0, i),
+                                         shorttext.substring(0, j));
+    if (best_common.length() &lt; suffixLength + prefixLength) {
+      best_common = shorttext.substring(j - suffixLength, j)
+          + shorttext.substring(j, j + prefixLength);
+      best_longtext_a = longtext.substring(0, i - suffixLength);
+      best_longtext_b = longtext.substring(i + prefixLength);
+      best_shorttext_a = shorttext.substring(0, j - suffixLength);
+      best_shorttext_b = shorttext.substring(j + prefixLength);
+    }
+  }
+  if (best_common.length() &gt;= longtext.length() / 2) {
+    return new String[]{best_longtext_a, best_longtext_b,
+                        best_shorttext_a, best_shorttext_b, best_common};
+  } else {
+    return null;
+  }
+}</textarea>
+<p>See earlier code for 'diff_commonPrefix' and 'diff_commonSuffix' functions.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code5', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code5c" style="display: none">
+<textarea id="code5c_" class="python"># Check to see if the problem can be split in two.
+hm = diff_halfMatch(text1, text2)
+if hm:
+  # A half-match was found, sort out the return data.
+  (text1_a, text1_b, text2_a, text2_b, mid_common) = hm
+  # Send both pairs off for separate processing.
+  diffs_a = diff_main(text1_a, text2_a)
+  diffs_b = diff_main(text1_b, text2_b)
+  # Merge the results.
+  return diffs_a + [(DIFF_EQUAL, mid_common)] + diffs_b
+
+def diff_halfMatch(text1, text2):
+  # Do the two texts share a substring which is at least half the length of the
+  # longer text?
+  if len(text1) &gt; len(text2):
+    (longtext, shorttext) = (text1, text2)
+  else:
+    (shorttext, longtext) = (text1, text2)
+  if len(longtext) &lt; 10 or len(shorttext) &lt; 1:
+    return None  # Pointless.
+
+  def diff_halfMatchI(longtext, shorttext, i):
+    seed = longtext[i:i + len(longtext) / 4]
+    best_common = ''
+    j = shorttext.find(seed)
+    while j != -1:
+      prefixLength = diff_commonPrefix(longtext[i:], shorttext[j:])
+      suffixLength = diff_commonSuffix(longtext[:i], shorttext[:j])
+      # print "%s|%s+%s|%s vs. %s|%s+%s|%s" %
+      #     (my_suffix[0], my_suffix[2], my_prefix[2], my_prefix[0],
+      #     my_suffix[1], my_suffix[2], my_prefix[2], my_prefix[1])
+      if len(best_common) &lt; suffixLength + prefixLength:
+        best_common = (shorttext[j - suffixLength:j] +
+            shorttext[j:j + prefixLength])
+        best_longtext_a = longtext[:i - suffixLength]
+        best_longtext_b = longtext[i + prefixLength:]
+        best_shorttext_a = shorttext[:j - suffixLength]
+        best_shorttext_b = shorttext[j + prefixLength:]
+      j = shorttext.find(seed, j + 1)
+
+    if len(best_common) &gt;= len(longtext) / 2:
+      return (best_longtext_a, best_longtext_b,
+              best_shorttext_a, best_shorttext_b, best_common)
+    else:
+      return None
+
+  # First check if the second quarter is the seed for a half-match.
+  hm1 = diff_halfMatchI(longtext, shorttext, (len(longtext) + 3) / 4)
+  # Check again based on the third quarter.
+  hm2 = diff_halfMatchI(longtext, shorttext, (len(longtext) + 1) / 2)
+  if not hm1 and not hm2:
+    return None
+  elif not hm2:
+    hm = hm1
+  elif not hm1:
+    hm = hm2
+  else:
+    # Both matched.  Select the longest.
+    if len(hm1[4]) &gt; len(hm2[4]):
+      hm = hm1
+    else:
+      hm = hm2
+
+  # A half-match was found, sort out the return data.
+  if len(text1) &gt; len(text2):
+    (text1_a, text1_b, text2_a, text2_b, mid_common) = hm
+  else:
+    (text2_a, text2_b, text1_a, text1_b, mid_common) = hm
+  return (text1_a, text1_b, text2_a, text2_b, mid_common)</textarea>
+<p>See earlier code for 'diff_commonPrefix' and 'diff_commonSuffix' functions.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code5', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<hr>
+<h2>2 &nbsp; Difference Algorithms</h2>
+
+<p>Once the pre-processing optimisation is complete, the remaining text 
+is compared with a difference algorithm.  A brute-force technique would 
+take O(n<sub>1</sub>*n<sub>2</sub>) to execute (where n<sub>1</sub> and n<sub>2</sub>
+ are the lengths of each input).  Since this is clearly unscalable in 
+practical applications where the text lengths are arbitrary, much 
+research has been conducted on better algorithms which approach O(n<sub>1</sub>+n<sub>2</sub>).  However, these algorithms are not interchangeable.  There are several criteria beyond speed which are important.</p>
+
+<h3>2.1 &nbsp; Input</h3>
+
+<p>There are three common modes for comparing input texts:</p>
+
+<code>Text 1: The cat in the hat.<br>
+Text 2: The bird in the hand.<br>
+Char diff: The <del>cat</del><ins>bird</ins> in the ha<del>t</del><ins>nd</ins>.<br>
+Word diff: The <del>cat</del><ins>bird</ins> in the <del>hat</del><ins>hand</ins>.<br>
+Line diff: <del>The cat in the hat.</del><ins>The bird in the hand.</ins></code>
+
+<p>Comparing by individual characters produces the finest level of 
+detail but takes the longest to execute due to the larger number of 
+tokens.  Comparing by word boundaries or line breaks is faster and 
+produces fewer individual edits, but the total length of the edits is 
+larger.  The required level of detail varies depending on the 
+application.  For instance comparing source code is generally done on a 
+line-by-line basis, whereas comparing an English document is generally 
+done on a word-by-word basis, and binary data or DNA sequences is 
+generally done on a character-by-character basis.</p>
+
+<p>Any difference algorithm could theoretically process any input, 
+regardless of whether it is split by characters, words or lines.  
+However, some difference algorithms are much more efficient at handling 
+small tokens such as characters, others are much more efficient at 
+handling large tokens such as lines.  The reason is that there are an 
+infinite number of possible lines, and any line which does not appear in
+ one text but appears in the other is automatically known to be an 
+insertion or a deletion.  Conversely, there are only 80 or so distinct 
+tokens when processing characters (a-z, A-Z, 0-9 and some punctuation), 
+which means that any non-trivial text will contain multiple instances of
+ most if not all these characters.  Different algorithms can exploit 
+these statistical differences in the input texts, resulting in more 
+efficient strategies.  An algorithm which is specifically designed for 
+line-by-line differences is described in J. Hunt and M. McIlroy's 1976 
+paper: <a href="https://www.cs.dartmouth.edu/~doug/diff.pdf">An Algorithm for Differential File Comparison</a>.</p>
+
+<p>Another factor to consider is the availability of useful functions.  
+Most computer languages have superior string handling facilities (such 
+as regular expressions) when compared with array handling facilities.  
+These more powerful string functions may make character-based difference
+ algorithms easier to program.  On the other hand, the advent of Unicode
+ support in many languages means that strings may contain alphabet sizes
+ as great as 65,536.  This allows words or lines to be hashed down to a 
+single character so that the difference algorithm can make use of 
+strings instead of arrays.  To put this in perspective, the King James 
+Bible contains 30,833 unique lines and 28,880 unique 'words' (just 
+space-delimited, with leading or trailing punctuation not separated).</p>
+
+<h3>2.2 &nbsp; Output</h3>
+
+<p>Traditional difference algorithms produce a list of insertions and 
+deletions which when performed on the first text will result in the 
+second text.  An extension to this is the addition of a 'move' operator:</p>
+
+<code>Text 1: The black cat in the hat?<br>
+Text 2: The cat in the black hat!<br>
+Ins &amp; Del: The <del>black </del>cat in the <ins>black </ins>hat<del>?</del><ins>!</ins><br>
+...&amp; Move: The <span style="background-color: #ffff44;">^</span>cat in the <span style="background-color: #ffff44;">black </span>hat<del>?</del><ins>!</ins></code>
+
+<p>When a large block of text has moved from one location to another, it
+ is often more understandable to report this as a move rather than a 
+deletion and an insertion.  An algorithm which uses the 'move' operator 
+is described in P. Heckel's 1978 paper: <a href="http://portal.acm.org/citation.cfm?doid=359460.359467">A technique for isolating differences between files</a>.</p>
+
+<p>An entirely different approach is to use 'copy' and 'insert' as operators:</p>
+
+<code>
+Text 1: <span style="background-color: #ffff44;">The </span><span style="background-color: #b0ff90;">black </span><span style="background-color: #ffcc99;">cat</span><span style="background-color: #99ffff;"> </span>in<span style="background-color: #99ccff;"> the </span><span style="background-color: #cc99ff;">hat</span>?<br>
+Text 2: The black hat on the black cat!<br>
+Copy &amp; Ins: <span style="background-color: #ffff44;">The </span><span style="background-color: #b0ff90;">black </span><span style="background-color: #cc99ff;">hat</span><span style="background-color: #99ffff;"> </span><ins>on</ins><span style="background-color: #99ccff;"> the </span><span style="background-color: #b0ff90;">black </span><span style="background-color: #ffcc99;">cat</span><ins>!</ins>
+</code>
+
+<p>This approach uses fragments from the first text, which are copied 
+and pasted to form the second text.  Much like clipping out words from a
+ newspaper to compose a ransom note, except that the any clipped word 
+may be photocopied and used multiple times.  Any entirely new text is 
+inserted verbatim.  Copy/insert differences are generally not 
+human-readable.  However they are significantly faster to compute making
+ them superior than insert/delete differences for delta compression 
+applications.  An algorithm which uses the 'copy' and 'insert' operators
+ is described in J. MacDonald's 2000 paper: <a href="http://www.xmailserver.org/xdfs.pdf">File System Support for Delta Compression</a>.</p>
+
+<h3>2.3 &nbsp; Accuracy</h3>
+
+<p>No difference algorithm should ever return an incorrect output; that 
+is, an output which does not describe a valid path of differences from 
+one text to another.  However, some algorithms may return sub-optimal 
+outputs in the interests of speed.  For instance, Heckel's algorithm 
+(1978) is quick, but gets confused if repeated text exists in the 
+inputs:</p>
+
+<code>Text 1: &nbsp;A X X X X B<br>
+Text 2: &nbsp;C X X X X D<br>
+Optimal: <del>A</del><ins>C</ins> X X X X <del>B</del><ins>D</ins><br>
+Heckel: &nbsp;<del>A X X X X B</del><ins>C X X X X D</ins></code>
+
+<p>Another example of sacrificing accuracy for speed is to process the 
+whole texts with a line-based algorithm, then reprocess each run of 
+modified lines with a character-based algorithm.  The problem with this 
+multi-pass approach is that the line-based difference may sometimes 
+identify inappropriate commonalities between the two lines.  Blank lines
+ are a common cause of these since they may appear in two unrelated 
+texts.  These inappropriate commonalities serve to randomly split up 
+edit blocks and prevent genuinely common text from being discovered 
+during the character-based phase.  A solution to this is to pass the 
+line-based differences through a semantic cleanup algorithm (as 
+described below in section 3.2) before performing the character-based 
+differences.  In cases involving multiple edits throughout a long 
+document, performing a high-level difference followed by a low-level 
+difference can result in an order of magnitude improvement in speed and 
+memory requirements.  However, there remains a risk that the resulting 
+difference path may not be the shortest one possible.</p>
+
+<p>Arguably the best general-purpose difference algorithm is described in E. Myers' 1986 paper: <a href="https://neil.fraser.name/writing/diff/myers.pdf">An O(ND) Difference Algorithm and Its Variations</a>.
+  One of the proposed optimisations is to process the difference from 
+both ends simultaneously, meeting at the middle.  In most cases this 
+improves the performance by up to 50%.
+<!--
+However, there exist cases where the two differences do not meet:</P>
+
+<P><IMG SRC="abxab-ayb.gif" HEIGHT=210 WIDTH=340 ALT="[Diagram of two difference paths which fail to meet.]"></P>
+
+<P>Myers states, "The procedure for finding the middle snake of an optimal D-path requires a total of O(D) working storage for the two V vectors."  Unfortunately this is based on the unwarranted assumption that there is always a middle snake.  If the implementation is not expecting these cases, the result can either be a difference which shares no commonalities, an infinite loop, or a crash.</P>
+
+<P>There are two solutions to this problem.  One is to use a hash to store a footprint for every spot which has been visited by the subordinate path and the D-value at that point.  This enables a connection to be made without the paths meeting on the same snake.  Unfortunately this increases the working storage to O(N<sup>2</sup>).  It also incurs a certain performance loss due to paths running parallel to each other.  Another solution is to terminate and discard the reverse path when it exceeds half-D in length, then continue to push the forward path all the way to the opposite corner.  This incurs an O(ND) performance loss.  Both of these solutions are examples where a technique may speed up an algorithm in the general case, at the expense of slowing it down on certain other cases.</P>
+
+<P>Myers also states, "The algorithm stops as soon as the smallest D is encountered for which furthest reaching D-paths in opposite directions overlap."  Unfortunately this is based on the unwarranted assumption that the first overlap is necessarily the shortest path.  This is not always the case:</P>
+
+<P><IMG SRC="xaxcxabc-abcy.gif" HEIGHT=270 WIDTH=521 ALT="[Diagram of two difference paths which meet sub-optimally.]"></P>
+
+<P>In this example the paths first meet at (4,4), but this path has a combined edit length of eight, whereas the incomplete path approaching (0,0) along the top edge would eventually have an edit length of six.  This represents the distinction between <code><del>X</del>A<ins>B</ins><del>X</del>C<ins>Y</ins><del>XABC</del></code> and <code><del>XAXCX</del>ABC<ins>Y</ins></code>.  There does not appear to be a general solution for the problem of predicting edit lengths for paths which have not yet reached their destination.  As a result, processing a difference from both ends may double the speed, but at the expense of accuracy.</P>
+-->
+</p><hr>
+<h2>3 &nbsp; Post-processing Cleanup</h2>
+
+<p>A perfect difference algorithm will report the minimum number of 
+edits required to convert one text into the other.  However, sometimes 
+the result is too perfect:</p>
+
+<code>Text 1: I am the very model of a modern major general.<br>
+Text 2: `Twas brillig, and the slithy toves did gyre and gimble in the wabe.<br>
+Diff: &nbsp; <del>I</del><ins>`Twas</ins> <ins>brillig, </ins>a<del>m</del><ins>nd</ins> the <del>ver</del><ins>slith</ins>y <del>m</del><ins>t</ins>o<del>d</del><ins>v</ins>e<del>l</del><ins>s</ins> <del>of</del><ins>did</ins> <del>a mod</del><ins>gyr</ins>e<del>rn</del> <del>m</del>a<del>jor</del><ins>nd</ins> g<ins>imbl</ins>e<ins> i</ins>n<ins> th</ins>e<del>r</del><ins> w</ins>a<del>l</del><ins>be</ins>.</code>
+
+<p>The first step when dealing with a new diff is to transpose and merge
+ like sections.  In the above example one such optimization is possible.</p>
+
+<code>
+Old: <del>I</del><ins>`Twas</ins> <ins>brillig, </ins>a<del>m</del><ins>nd</ins> ...<br>
+New: <del>I</del><ins>`Twas brillig,</ins> a<del>m</del><ins>nd</ins> ...</code>
+
+<p>Both diffs are identical in their output, but the second one has 
+merged two operations into one by transposing a coincidentally repeated 
+equality.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code7"><button onclick="show('code7', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code7', 'b')">Show Java</button> &nbsp; <button onclick="show('code7', 'c')">Show Python</button></div>
+<div id="code7a" style="display: none">
+<textarea id="code7a_" class="javascript">function diff_cleanupMerge(diffs) {
+  // Reorder and merge like edit sections.  Merge equalities.
+  // Any edit section can move as long as it does not cross an equality.
+  diffs.push([DIFF_EQUAL, '']);  // Add a dummy entry at the end.
+  var pointer = 0;
+  var count_delete = 0;
+  var count_insert = 0;
+  var text_delete = '';
+  var text_insert = '';
+  var commonlength;
+  while (pointer &lt; diffs.length) {
+    switch (diffs[pointer][0]) {
+      case DIFF_INSERT:
+        count_insert++;
+        text_insert += diffs[pointer][1];
+        pointer++;
+        break;
+      case DIFF_DELETE:
+        count_delete++;
+        text_delete += diffs[pointer][1];
+        pointer++;
+        break;
+      case DIFF_EQUAL:
+        // Upon reaching an equality, check for prior redundancies.
+        if (count_delete !== 0 || count_insert !== 0) {
+          if (count_delete !== 0 &amp;&amp; count_insert !== 0) {
+            // Factor out any common prefixies.
+            commonlength = diff_commonPrefix(text_insert, text_delete);
+            if (commonlength !== 0) {
+              if ((pointer - count_delete - count_insert) &gt; 0 &amp;&amp;
+                  diffs[pointer - count_delete - count_insert - 1][0] ==
+                  DIFF_EQUAL) {
+                diffs[pointer - count_delete - count_insert - 1][1] +=
+                    text_insert.substring(0, commonlength);
+              } else {
+                diffs.splice(0, 0, [DIFF_EQUAL,
+                    text_insert.substring(0, commonlength)]);
+                pointer++;
+              }
+              text_insert = text_insert.substring(commonlength);
+              text_delete = text_delete.substring(commonlength);
+            }
+            // Factor out any common suffixies.
+            commonlength = diff_commonSuffix(text_insert, text_delete);
+            if (commonlength !== 0) {
+              diffs[pointer][1] = text_insert.substring(text_insert.length -
+                  commonlength) + diffs[pointer][1];
+              text_insert = text_insert.substring(0, text_insert.length -
+                  commonlength);
+              text_delete = text_delete.substring(0, text_delete.length -
+                  commonlength);
+            }
+          }
+          // Delete the offending records and add the merged ones.
+          if (count_delete === 0) {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_INSERT, text_insert]);
+          } else if (count_insert === 0) {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_DELETE, text_delete]);
+          } else {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_DELETE, text_delete],
+                [DIFF_INSERT, text_insert]);
+          }
+          pointer = pointer - count_delete - count_insert +
+                    (count_delete ? 1 : 0) + (count_insert ? 1 : 0) + 1;
+        } else if (pointer !== 0 &amp;&amp; diffs[pointer - 1][0] == DIFF_EQUAL) {
+          // Merge this equality with the previous one.
+          diffs[pointer - 1][1] += diffs[pointer][1];
+          diffs.splice(pointer, 1);
+        } else {
+          pointer++;
+        }
+        count_insert = 0;
+        count_delete = 0;
+        text_delete = '';
+        text_insert = '';
+        break;
+    }
+  }
+  if (diffs[diffs.length - 1][1] === '') {
+    diffs.pop();  // Remove the dummy entry at the end.
+  }
+
+  // Second pass: look for single edits surrounded on both sides by equalities
+  // which can be shifted sideways to eliminate an equality.
+  // e.g: A&lt;ins&gt;BA&lt;/ins&gt;C -&gt; &lt;ins&gt;AB&lt;/ins&gt;AC
+  var changes = false;
+  pointer = 1;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (pointer &lt; diffs.length - 1) {
+    if (diffs[pointer - 1][0] == DIFF_EQUAL &amp;&amp;
+        diffs[pointer + 1][0] == DIFF_EQUAL) {
+      // This is a single edit surrounded by equalities.
+      if (diffs[pointer][1].substring(diffs[pointer][1].length -
+          diffs[pointer - 1][1].length) == diffs[pointer - 1][1]) {
+        // Shift the edit over the previous equality.
+        diffs[pointer][1] = diffs[pointer - 1][1] +
+            diffs[pointer][1].substring(0, diffs[pointer][1].length -
+                                        diffs[pointer - 1][1].length);
+        diffs[pointer + 1][1] = diffs[pointer - 1][1] + diffs[pointer + 1][1];
+        diffs.splice(pointer - 1, 1);
+        changes = true;
+      } else if (diffs[pointer][1].substring(0, diffs[pointer + 1][1].length) ==
+          diffs[pointer + 1][1]) {
+        // Shift the edit over the next equality.
+        diffs[pointer - 1][1] += diffs[pointer + 1][1];
+        diffs[pointer][1] =
+            diffs[pointer][1].substring(diffs[pointer + 1][1].length) +
+            diffs[pointer + 1][1];
+        diffs.splice(pointer + 1, 1);
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+  // If shifts were made, the diff needs reordering and another shift sweep.
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<div><button onclick="hide('code7', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code7b" style="display: none">
+<textarea id="code7b_" class="java">public void diff_cleanupMerge(LinkedList&lt;Diff&gt; diffs) {
+  // Reorder and merge like edit sections.  Merge equalities.
+  // Any edit section can move as long as it does not cross an equality.
+  diffs.add(new Diff(Operation.EQUAL, ""));  // Add a dummy entry at the end.
+  ListIterator&lt;Diff&gt; pointer = diffs.listIterator();
+  int count_delete = 0;
+  int count_insert = 0;
+  String text_delete = "";
+  String text_insert = "";
+  Diff thisDiff = pointer.next();
+  Diff prevEqual = null;
+  int commonlength;
+  while (thisDiff != null) {
+    switch (thisDiff.operation) {
+    case INSERT:
+      count_insert++;
+      text_insert += thisDiff.text;
+      prevEqual = null;
+      break;
+    case DELETE:
+      count_delete++;
+      text_delete += thisDiff.text;
+      prevEqual = null;
+      break;
+    case EQUAL:
+      if (count_delete != 0 || count_insert != 0) {
+        // Delete the offending records.
+        pointer.previous();  // Reverse direction.
+        while (count_delete-- &gt; 0) {
+          pointer.previous();
+          pointer.remove();
+        }
+        while (count_insert-- &gt; 0) {
+          pointer.previous();
+          pointer.remove();
+        }
+        if (count_delete != 0 &amp;&amp; count_insert != 0) {
+          // Factor out any common prefixies.
+          commonlength = diff_commonPrefix(text_insert, text_delete);
+          if (commonlength != 0) {
+            if (pointer.hasPrevious()) {
+              thisDiff = pointer.previous();
+              assert thisDiff.operation == Operation.EQUAL
+                     : "Previous diff should have been an equality.";
+              thisDiff.text += text_insert.substring(0, commonlength);
+              pointer.next();
+            } else {
+              pointer.add(new Diff(Operation.EQUAL,
+                  text_insert.substring(0, commonlength)));
+            }
+            text_insert = text_insert.substring(commonlength);
+            text_delete = text_delete.substring(commonlength);
+          }
+          // Factor out any common suffixies.
+          commonlength = diff_commonSuffix(text_insert, text_delete);
+          if (commonlength != 0) {
+            thisDiff = pointer.next();
+            thisDiff.text = text_insert.substring(text_insert.length()
+                - commonlength) + thisDiff.text;
+            text_insert = text_insert.substring(0, text_insert.length()
+                - commonlength);
+            text_delete = text_delete.substring(0, text_delete.length()
+                - commonlength);
+            pointer.previous();
+          }
+        }
+        // Insert the merged records.
+        if (text_delete.length() != 0) {
+          pointer.add(new Diff(Operation.DELETE, text_delete));
+        }
+        if (text_insert.length() != 0) {
+          pointer.add(new Diff(Operation.INSERT, text_insert));
+        }
+        // Step forward to the equality.
+        thisDiff = pointer.hasNext() ? pointer.next() : null;
+      } else if (prevEqual != null) {
+        // Merge this equality with the previous one.
+        prevEqual.text += thisDiff.text;
+        pointer.remove();
+        thisDiff = pointer.previous();
+        pointer.next();  // Forward direction
+      }
+      count_insert = 0;
+      count_delete = 0;
+      text_delete = "";
+      text_insert = "";
+      prevEqual = thisDiff;
+      break;
+    }
+    thisDiff = pointer.hasNext() ? pointer.next() : null;
+  }
+  // System.out.println(diff);
+  if (diffs.getLast().text.length() == 0) {
+    diffs.removeLast();  // Remove the dummy entry at the end.
+  }
+
+  /*
+   * Second pass: look for single edits surrounded on both sides by equalities
+   * which can be shifted sideways to eliminate an equality.
+   * e.g: A&lt;ins&gt;BA&lt;/ins&gt;C -&gt; &lt;ins&gt;AB&lt;/ins&gt;AC
+   */
+  boolean changes = false;
+  // Create a new iterator at the start.
+  // (As opposed to walking the current one back.)
+  pointer = diffs.listIterator();
+  Diff prevDiff = pointer.hasNext() ? pointer.next() : null;
+  thisDiff = pointer.hasNext() ? pointer.next() : null;
+  Diff nextDiff = pointer.hasNext() ? pointer.next() : null;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (nextDiff != null) {
+    if (prevDiff.operation == Operation.EQUAL &amp;&amp;
+        nextDiff.operation == Operation.EQUAL) {
+      // This is a single edit surrounded by equalities.
+      if (thisDiff.text.endsWith(prevDiff.text)) {
+        // Shift the edit over the previous equality.
+        thisDiff.text = prevDiff.text
+            + thisDiff.text.substring(0, thisDiff.text.length()
+                                         - prevDiff.text.length());
+        nextDiff.text = prevDiff.text + nextDiff.text;
+        pointer.previous(); // Walk past nextDiff.
+        pointer.previous(); // Walk past thisDiff.
+        pointer.previous(); // Walk past prevDiff.
+        pointer.remove(); // Delete prevDiff.
+        pointer.next(); // Walk past thisDiff.
+        thisDiff = pointer.next(); // Walk past nextDiff.
+        nextDiff = pointer.hasNext() ? pointer.next() : null;
+        changes = true;
+      } else if (thisDiff.text.startsWith(nextDiff.text)) {
+        // Shift the edit over the next equality.
+        prevDiff.text += nextDiff.text;
+        thisDiff.text = thisDiff.text.substring(nextDiff.text.length()) +
+            nextDiff.text;
+        pointer.remove(); // Delete nextDiff.
+        nextDiff = pointer.hasNext() ? pointer.next() : null;
+        changes = true;
+      }
+    }
+    prevDiff = thisDiff;
+    thisDiff = nextDiff;
+    nextDiff = pointer.hasNext() ? pointer.next() : null;
+  }
+  // If shifts were made, the diff needs reordering and another shift sweep.
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code7', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code7c" style="display: none">
+<textarea id="code7c_" class="python">def diff_cleanupMerge(diffs):
+  # Reorder and merge like edit sections.  Merge equalities.
+  # Any edit section can move as long as it does not cross an equality.
+  diffs.append((DIFF_EQUAL, ''))  # Add a dummy entry at the end.
+  pointer = 0
+  count_delete = 0
+  count_insert = 0
+  text_delete = ''
+  text_insert = ''
+  while pointer &lt; len(diffs):
+    if diffs[pointer][0] == DIFF_INSERT:
+      count_insert += 1
+      text_insert += diffs[pointer][1]
+      pointer += 1
+    elif diffs[pointer][0] == DIFF_DELETE:
+      count_delete += 1
+      text_delete += diffs[pointer][1]
+      pointer += 1
+    elif diffs[pointer][0] == DIFF_EQUAL:
+      # Upon reaching an equality, check for prior redundancies.
+      if count_delete != 0 or count_insert != 0:
+        if count_delete != 0 and count_insert != 0:
+          # Factor out any common prefixies.
+          commonlength = diff_commonPrefix(text_insert, text_delete)
+          if commonlength != 0:
+            x = pointer - count_delete - count_insert - 1
+            if x &gt;= 0 and diffs[x][0] == DIFF_EQUAL:
+              diffs[x] = (diffs[x][0], diffs[x][1] +
+                          text_insert[:commonlength])
+            else:
+              diffs.insert(0, (DIFF_EQUAL, text_insert[:commonlength]))
+              pointer += 1
+            text_insert = text_insert[commonlength:]
+            text_delete = text_delete[commonlength:]
+          # Factor out any common suffixies.
+          commonlength = diff_commonSuffix(text_insert, text_delete)
+          if commonlength != 0:
+            diffs[pointer] = (diffs[pointer][0], text_insert[-commonlength:] +
+                diffs[pointer][1])
+            text_insert = text_insert[:-commonlength]
+            text_delete = text_delete[:-commonlength]
+        # Delete the offending records and add the merged ones.
+        if count_delete == 0:
+          diffs[pointer - count_insert : pointer] = [
+              (DIFF_INSERT, text_insert)]
+        elif count_insert == 0:
+          diffs[pointer - count_delete : pointer] = [
+              (DIFF_DELETE, text_delete)]
+        else:
+          diffs[pointer - count_delete - count_insert : pointer] = [
+              (DIFF_DELETE, text_delete),
+              (DIFF_INSERT, text_insert)]
+        pointer = pointer - count_delete - count_insert + 1
+        if count_delete != 0:
+          pointer += 1
+        if count_insert != 0:
+          pointer += 1
+      elif pointer != 0 and diffs[pointer - 1][0] == DIFF_EQUAL:
+        # Merge this equality with the previous one.
+        diffs[pointer - 1] = (diffs[pointer - 1][0],
+                              diffs[pointer - 1][1] + diffs[pointer][1])
+        del diffs[pointer]
+      else:
+        pointer += 1
+
+      count_insert = 0
+      count_delete = 0
+      text_delete = ''
+      text_insert = ''
+
+  if diffs[-1][1] == '':
+    diffs.pop()  # Remove the dummy entry at the end.
+
+  # Second pass: look for single edits surrounded on both sides by equalities
+  # which can be shifted sideways to eliminate an equality.
+  # e.g: A&lt;ins&gt;BA&lt;/ins&gt;C -&gt; &lt;ins&gt;AB&lt;/ins&gt;AC
+  changes = False
+  pointer = 1
+  # Intentionally ignore the first and last element (don't need checking).
+  while pointer &lt; len(diffs) - 1:
+    if (diffs[pointer - 1][0] == DIFF_EQUAL and
+        diffs[pointer + 1][0] == DIFF_EQUAL):
+      # This is a single edit surrounded by equalities.
+      if diffs[pointer][1].endswith(diffs[pointer - 1][1]):
+        # Shift the edit over the previous equality.
+        diffs[pointer] = (diffs[pointer][0],
+            diffs[pointer - 1][1] +
+            diffs[pointer][1][:-len(diffs[pointer - 1][1])])
+        diffs[pointer + 1] = (diffs[pointer + 1][0],
+                              diffs[pointer - 1][1] + diffs[pointer + 1][1])
+        del diffs[pointer - 1]
+        changes = True
+      elif diffs[pointer][1].startswith(diffs[pointer + 1][1]):
+        # Shift the edit over the next equality.
+        diffs[pointer - 1] = (diffs[pointer - 1][0],
+                              diffs[pointer - 1][1] + diffs[pointer + 1][1])
+        diffs[pointer] = (diffs[pointer][0],
+            diffs[pointer][1][len(diffs[pointer + 1][1]):] +
+            diffs[pointer + 1][1])
+        del diffs[pointer + 1]
+        changes = True
+    pointer += 1
+
+  # If shifts were made, the diff needs reordering and another shift sweep.
+  if changes:
+    diff_cleanupMerge(diffs)</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code7', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<p>Transposition helps a little bit and is completely safe, but the 
+larger problem is that differences between two dissimilar texts are 
+frequently littered with small coincidental equalities called 'chaff'.  
+The expected result above might be to delete all of 'Text 1' and insert 
+all of 'Text 2', with the possible exception of the period at the end.  
+However most algorithms will salvage bits and pieces, resulting in a 
+mess.</p>
+
+<p>This problem is most apparent in character-based differences since 
+the small set of alphanumeric characters ensures commonalities.  A 
+word-based difference of the above example would be distinctly better, 
+but would have inappropriately salvaged " the ".  Longer texts would 
+result in more shared words.  A line-based difference of the above 
+example would be ideal.  However, even line-based differences are 
+vulnerable to inappropriately salvaging blank lines and other common 
+lines (such as "} else {" in source code).</p>
+
+<p>The problem of chaff is actually one of two different problems: 
+efficiency or semantics.  Each of these problems requires a different 
+solution.</p>
+
+<h3>3.1 &nbsp; Efficiency</h3>
+
+<p>If the output of the difference is designed for computer use (such as
+ delta compression or input to a patch program) then depending on the 
+subsequent application or storage method, each edit operation may have 
+some fixed computational overhead associated with it in addition to the 
+number of characters within that edit.  For instance, fifty 
+single-character edits might take more storage or take longer for the 
+next application to process than a single fifty-character edit.  Once 
+the trade-off has been measured, the computational or storage cost of an
+ edit operation may be stated in terms of the equivalent cost of 
+characters of change.  If this cost is zero, then there is no overhead. 
+ If this cost is (for example) ten characters, then increasing the total
+ number of characters edited by up to nine, while reducing the number of
+ edit operations by one, would result in a net savings.  Thus the total 
+cost of a difference can be computed as <code>o * c + n</code> where <code>o</code> is the number of edit operations, <code>c</code> is the constant cost of each edit operation in terms of characters, and <code>n</code> is the total number of characters changed.  Below are three examples (with <code>c</code>
+ set arbitrarily at 4) showing how increasing the number of edited 
+characters can reduce the number of edit operations and reduce the 
+overall cost of the difference.</p>
+
+<p>First, any equality (text which remains unchanged) which is 
+surrounded on both sides by an existing insertion and deletion need be 
+less than <code>c</code> characters long for it to be advantageous to split it.</p>
+
+<table>
+<tbody><tr><td></td><td><code>Operations</code></td><td><code>&nbsp; Characters</code></td><td><code>&nbsp; Cost</code></td></tr>
+<tr><td><code>
+Text 1: ABXYZCD<br>
+Text 2: 12XYZ34<br>
+Diff: &nbsp; <del>AB</del><ins>12</ins>XYZ<del>CD</del><ins>34</ins><br>
+Split:&nbsp; <del>AB</del><ins>12</ins><del>XYZ</del><ins>XYZ</ins><del>CD</del><ins>34</ins><br>
+Merge:&nbsp; <del>ABXYZCD</del><ins>12XYZ34</ins></code>
+</td>
+<td align="right"><code><br><br>4 * 4<br>6 * 4<br>2 * 4</code></td>
+<td align="right"><code><br><br>+ 8<br>+ 14<br>+ 14</code></td>
+<td align="right"><code><br><br>= 24<br>= 38<br>= 22</code></td>
+</tr>
+</tbody></table>
+
+<p>Secondly, any equality which is surrounded on one side by an existing
+ insertion and deletion, and on the other side by an existing insertion <i>or</i> deletion, need be less than half <code>c</code> characters long for it to be advantageous to split it.</p>
+
+<table>
+<tbody><tr><td></td><td><code>Operations</code></td><td><code>&nbsp; Characters</code></td><td><code>&nbsp; Cost</code></td></tr>
+<tr><td><code>
+Text 1: XCD<br>
+Text 2: 12X34<br>
+Diff: &nbsp; <ins>12</ins>X<del>CD</del><ins>34</ins><br>
+Split:&nbsp; <ins>12</ins><del>X</del><ins>X</ins><del>CD</del><ins>34</ins><br>
+Merge:&nbsp; <del>XCD</del><ins>12X34</ins></code>
+</td>
+<td align="right"><code><br><br>3 * 4<br>5 * 4<br>2 * 4</code></td>
+<td align="right"><code><br><br>+ 6<br>+ 8<br>+ 8</code></td>
+<td align="right"><code><br><br>= 18<br>= 28<br>= 16</code></td>
+</tr>
+</tbody></table>
+
+<p>Both of these conditions may be computed quickly by making a single 
+pass through the data, backtracking to reevaluate the previous equality 
+if a split has changed the type of edits surrounding it.  Another pass 
+is made to reorder the edit operations and merge like ones together.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code8"><button onclick="show('code8', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code8', 'b')">Show Java</button> &nbsp; <button onclick="show('code8', 'c')">Show Python</button></div>
+<div id="code8a" style="display: none">
+<textarea id="code8a_" class="javascript">function diff_cleanupEfficiency(diffs) {
+  // Reduce the number of edits by eliminating operationally trivial equalities.
+  var changes = false;
+  var equalities = [];  // Stack of indices where equalities are found.
+  var lastequality = '';  // Always equal to equalities[equalities.length-1][1]
+  var pointer = 0;  // Index of current position.
+  // Is there an insertion operation before the last equality.
+  var pre_ins = false;
+  // Is there a deletion operation before the last equality.
+  var pre_del = false;
+  // Is there an insertion operation after the last equality.
+  var post_ins = false;
+  // Is there a deletion operation after the last equality.
+  var post_del = false;
+  while (pointer &lt; diffs.length) {
+    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
+      if (diffs[pointer][1].length &lt; Diff_EditCost &amp;&amp;
+          (post_ins || post_del)) {
+        // Candidate found.
+        equalities.push(pointer);
+        pre_ins = post_ins;
+        pre_del = post_del;
+        lastequality = diffs[pointer][1];
+      } else {
+        // Not a candidate, and can never become one.
+        equalities = [];
+        lastequality = '';
+      }
+      post_ins = post_del = false;
+    } else {  // an insertion or deletion
+      if (diffs[pointer][0] == DIFF_DELETE) {
+        post_del = true;
+      } else {
+        post_ins = true;
+      }
+      /*
+       * Five types to be split:
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;XY&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;
+       * &lt;ins&gt;A&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;del&gt;C&lt;/del&gt;
+       */
+      if (lastequality &amp;&amp; ((pre_ins &amp;&amp; pre_del &amp;&amp; post_ins &amp;&amp; post_del) ||
+                           ((lastequality.length &lt; Diff_EditCost / 2) &amp;&amp;
+                            (pre_ins + pre_del + post_ins + post_del) == 3))) {
+        // Duplicate record
+        diffs.splice(equalities[equalities.length - 1], 0,
+                     [DIFF_DELETE, lastequality]);
+        // Change second copy to insert.
+        diffs[equalities[equalities.length - 1] + 1][0] = DIFF_INSERT;
+        equalities.pop();  // Throw away the equality we just deleted;
+        lastequality = '';
+        if (pre_ins &amp;&amp; pre_del) {
+          // No changes made which could affect previous entry, keep going.
+          post_ins = post_del = true;
+          equalities = [];
+        } else {
+          equalities.pop();  // Throw away the previous equality;
+          pointer = equalities.length ? equalities[equalities.length - 1] : -1;
+          post_ins = post_del = false;
+        }
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button onclick="hide('code8', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code8b" style="display: none">
+<textarea id="code8b_" class="java">public void diff_cleanupEfficiency(LinkedList&lt;Diff&gt; diffs) {
+  // Reduce the number of edits by eliminating operationally trivial
+  // equalities.
+  if (diffs.isEmpty()) {
+    return;
+  }
+  boolean changes = false;
+  Stack&lt;Diff&gt; equalities = new Stack&lt;Diff&gt;();  // Stack of equalities.
+  String lastequality = null;  // Always equal to equalities.lastElement().text
+  ListIterator&lt;Diff&gt; pointer = diffs.listIterator();
+  // Is there an insertion operation before the last equality.
+  boolean pre_ins = false;
+  // Is there a deletion operation before the last equality.
+  boolean pre_del = false;
+  // Is there an insertion operation after the last equality.
+  boolean post_ins = false;
+  // Is there a deletion operation after the last equality.
+  boolean post_del = false;
+  Diff thisDiff = pointer.next();
+  Diff safeDiff = thisDiff;  // The last Diff that is known to be unsplitable.
+  while (thisDiff != null) {
+    if (thisDiff.operation == Operation.EQUAL) {
+      // equality found
+      if (thisDiff.text.length() &lt; Diff_EditCost &amp;&amp; (post_ins || post_del)) {
+        // Candidate found.
+        equalities.push(thisDiff);
+        pre_ins = post_ins;
+        pre_del = post_del;
+        lastequality = thisDiff.text;
+      } else {
+        // Not a candidate, and can never become one.
+        equalities.clear();
+        lastequality = null;
+        safeDiff = thisDiff;
+      }
+      post_ins = post_del = false;
+    } else {
+      // an insertion or deletion
+      if (thisDiff.operation == Operation.DELETE) {
+        post_del = true;
+      } else {
+        post_ins = true;
+      }
+      /*
+       * Five types to be split:
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;XY&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;
+       * &lt;ins&gt;A&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+       * &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;del&gt;C&lt;/del&gt;
+       */
+      if (lastequality != null
+          &amp;&amp; ((pre_ins &amp;&amp; pre_del &amp;&amp; post_ins &amp;&amp; post_del)
+              || ((lastequality.length() &lt; Diff_EditCost / 2)
+                  &amp;&amp; ((pre_ins ? 1 : 0) + (pre_del ? 1 : 0)
+                      + (post_ins ? 1 : 0) + (post_del ? 1 : 0)) == 3))) {
+        // Walk back to offending equality.
+        while (thisDiff != equalities.lastElement()) {
+          thisDiff = pointer.previous();
+        }
+        pointer.next();
+
+        // Replace equality with a delete.
+        pointer.set(new Diff(Operation.DELETE, lastequality));
+        // Insert a coresponding an insert.
+        pointer.add(thisDiff = new Diff(Operation.INSERT, lastequality));
+
+        equalities.pop();  // Throw away the equality we just deleted.
+        lastequality = null;
+        if (pre_ins &amp;&amp; pre_del) {
+          // No changes made which could affect previous entry, keep going.
+          post_ins = post_del = true;
+          equalities.clear();
+          safeDiff = thisDiff;
+        } else {
+          if (!equalities.empty()) {
+            // Throw away the previous equality (it needs to be reevaluated).
+            equalities.pop();
+          }
+          if (equalities.empty()) {
+            // There are no previous questionable equalities,
+            // walk back to the last known safe diff.
+            thisDiff = safeDiff;
+          } else {
+            // There is an equality we can fall back to.
+            thisDiff = equalities.lastElement();
+          }
+          while (thisDiff != pointer.previous()) {
+            // Intentionally empty loop.
+          }
+          post_ins = post_del = false;
+        }
+
+        changes = true;
+      }
+    }
+    thisDiff = pointer.hasNext() ? pointer.next() : null;
+  }
+
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code8', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code8c" style="display: none">
+<textarea id="code8c_" class="python">def diff_cleanupEfficiency(diffs):
+  # Reduce the number of edits by eliminating operationally trivial equalities.
+  changes = False
+  equalities = []  # Stack of indices where equalities are found.
+  lastequality = ''  # Always equal to equalities[len(equalities)-1][1]
+  pointer = 0  # Index of current position.
+  pre_ins = False  # Is there an insertion operation before the last equality.
+  pre_del = False  # Is there a deletion operation before the last equality.
+  post_ins = False  # Is there an insertion operation after the last equality.
+  post_del = False  # Is there a deletion operation after the last equality.
+  while pointer &lt; len(diffs):
+    if diffs[pointer][0] == DIFF_EQUAL:  # equality found
+      if (len(diffs[pointer][1]) &lt; Diff_EditCost and
+          (post_ins or post_del)):
+        # Candidate found.
+        equalities.append(pointer)
+        pre_ins = post_ins
+        pre_del = post_del
+        lastequality = diffs[pointer][1]
+      else:
+        # Not a candidate, and can never become one.
+        equalities = []
+        lastequality = ''
+
+      post_ins = post_del = False
+    else:  # an insertion or deletion
+      if diffs[pointer][0] == DIFF_DELETE:
+        post_del = True
+      else:
+        post_ins = True
+        
+      # Five types to be split:
+      # &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;XY&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+      # &lt;ins&gt;A&lt;/ins&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+      # &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;
+      # &lt;ins&gt;A&lt;/del&gt;X&lt;ins&gt;C&lt;/ins&gt;&lt;del&gt;D&lt;/del&gt;
+      # &lt;ins&gt;A&lt;/ins&gt;&lt;del&gt;B&lt;/del&gt;X&lt;del&gt;C&lt;/del&gt;
+      
+      if lastequality and ((pre_ins and pre_del and post_ins and post_del) or
+                           ((len(lastequality) &lt; Diff_EditCost / 2) and
+                            (pre_ins + pre_del + post_ins + post_del) == 3)):
+        # Duplicate record
+        diffs.insert(equalities[len(equalities) - 1],
+                     (DIFF_DELETE, lastequality))
+        # Change second copy to insert.
+        diffs[equalities[len(equalities) - 1] + 1] = (DIFF_INSERT,
+            diffs[equalities[len(equalities) - 1] + 1][1])
+        equalities.pop()  # Throw away the equality we just deleted
+        lastequality = ''
+        if pre_ins and pre_del:
+          # No changes made which could affect previous entry, keep going.
+          post_ins = post_del = True
+          equalities = []
+        else:
+          if len(equalities):
+            equalities.pop()  # Throw away the previous equality
+          if len(equalities):
+            pointer = equalities[len(equalities) - 1]
+          else:
+            pointer = -1
+          post_ins = post_del = False
+        changes = True
+    pointer += 1
+
+  if changes:
+    diff_cleanupMerge(diffs)</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code8', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<p>Although this is a good start, it is not a complete solution since it does not catch a third type of condition:</p>
+
+<table>
+<tbody><tr><td></td><td><code>Operations</code></td><td><code>&nbsp; Characters</code></td><td><code>&nbsp; Cost</code></td></tr>
+<tr><td><code>
+Text 1: ABCD<br>
+Text 2: A1B2C3D4<br>
+Diff: &nbsp; A<ins>1</ins>B<ins>2</ins>C<ins>3</ins>D<ins>4</ins><br>
+Split:&nbsp; A<ins>1</ins><del>B</del><ins>B</ins><ins>2</ins><del>C</del><ins>C</ins><ins>3</ins><del>D</del><ins>D</ins><ins>4</ins><br>
+Merge:&nbsp; A<del>BCD</del><ins>1B2C3D4</ins></code>
+</td>
+<td align="right"><code><br><br>4 * 4<br>10 * 4<br>2 * 4</code></td>
+<td align="right"><code><br><br>+ 4<br>+ 10<br>+ 10</code></td>
+<td align="right"><code><br><br>= 20<br>= 50<br>= 18</code></td>
+</tr>
+</tbody></table>
+
+<p>In this and similar cases, each individual split would result in a 
+higher total cost, yet these splits, when combined, result in a lower 
+total cost.  Computing this form of optimisation appears to be an O(n<sup>2</sup>)
+ operation on selected regions of the difference (as opposed to the O(n)
+ optimisation for the first two cases), thus it may be more costly than 
+the savings themselves.</p>
+
+<h3>3.2 &nbsp; Semantics</h3>
+<h4>3.2.1 &nbsp; Semantic Chaff</h4>
+
+<p>If the output of the difference is designed for human use (such as a 
+visual display), the problem changes.  In this case the goal is to 
+provide more meaningful divisions.  Consider these two examples:</p>
+
+<code>
+Text 1: Quicq fyre &nbsp; &nbsp; &nbsp;| Text 1: Slow fool<br>
+Text 2: Quick fire &nbsp; &nbsp; &nbsp;| Text 2: Quick fire<br>
+Diff: &nbsp; Quic<del>q</del><ins>k</ins> f<del>y</del><ins>i</ins>re &nbsp; &nbsp;| Diff: &nbsp; <del>Slow</del><ins>Quick</ins> f<del>ool</del><ins>ire</ins><br>
+Split:&nbsp; Quic<del>q</del><ins>k</ins><del> f</del><ins> f</ins><del>y</del><ins>i</ins>re &nbsp;| Split:&nbsp; <del>Slow</del><ins>Quick</ins><del> f</del><ins> f</ins><del>ool</del><ins>ire</ins><br>
+Merge:&nbsp; Quic<del>q fy</del><ins>k fi</ins>re &nbsp;| Merge:&nbsp; <del>Slow fool</del><ins>Quick fire</ins>
+</code>
+
+<p>Mathematically, these examples are very similar.  They have the same 
+central equality (" f") and they have the same number of edit 
+operations.  Yet the first example (which involves correcting two 
+typographical errors) is more meaningful in its raw diff stage, rather 
+than after splitting and merging the equality.  Whereas the second 
+example (which involves larger edits) has little meaning at its raw diff
+ stage, and is much clearer after splitting and merging the equality.  
+The primary distinction between these two examples is the amount of 
+change surrounding the equality.</p>
+
+<p>One solution for removing semantic chaff is to pass over the data 
+looking for equalities that are smaller than or equal to the insertions 
+and deletions on both sides of them.  When such an equality is found, it
+ is split into a deletion and an addition.  Then a second pass is made 
+to reorder and merge all deletions and additions which aren't separated 
+by surviving equalities.  Below is a somewhat contrived example showing 
+the these steps:</p>
+
+<code>Text 1:&nbsp; Hovering<br>
+Text 2:&nbsp; My government<br>
+Diff:&nbsp; &nbsp; <del>H</del><ins>My g</ins>over<del>i</del>n<del>g</del><ins>ment</ins><br>
+Split 1: <del>H</del><ins>My g</ins>over<del>i</del><del>n</del><ins>n</ins><del>g</del><ins>ment</ins><br>
+Split 2: <del>H</del><ins>My g</ins><del>over</del><ins>over</ins><del>i</del><del>n</del><ins>n</ins><del>g</del><ins>ment</ins><br>
+Merge: &nbsp; <del>Hovering</del><ins>My government</ins></code>
+
+<p>In this case "over" is four letters long, compared with only five and
+ one letters of changes surrounding it, so it is left.  However, "n" is 
+only one letter, compared with one and five letters of changes 
+surrounding it.  Therefore "n" is split.  Once an equality is split, the
+ pass must backtrack to reevaluate the previous equality since its 
+context has changed.  In this case "over" is now surrounded by five and 
+eight letters of changes, so it too is split.  Finally all the pieces 
+are collected together, resulting in an easily understandable 
+difference.</p><p>
+
+</p><fieldset><legend>Sample Code</legend>
+<div id="code9"><button onclick="show('code9', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code9', 'b')">Show Java</button> &nbsp; <button onclick="show('code9', 'c')">Show Python</button></div>
+<div id="code9a" style="display: none">
+<textarea id="code9a_" class="javascript">function diff_cleanupSemantic(diffs) {
+  // Reduce the number of edits by eliminating semantically trivial equalities.
+  var changes = false;
+  var equalities = [];  // Stack of indices where equalities are found.
+  var lastequality = null;  // Always equal to equalities[equalities.length-1][1]
+  var pointer = 0;  // Index of current position.
+  // Number of characters that changed prior to the equality.
+  var length_changes1 = 0;
+  // Number of characters that changed after the equality.
+  var length_changes2 = 0;
+  while (pointer &lt; diffs.length) {
+    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
+      equalities.push(pointer);
+      length_changes1 = length_changes2;
+      length_changes2 = 0;
+      lastequality = diffs[pointer][1];
+    } else {  // an insertion or deletion
+      length_changes2 += diffs[pointer][1].length;
+      if (lastequality !== null &amp;&amp; (lastequality.length &lt;= length_changes1) &amp;&amp;
+          (lastequality.length &lt;= length_changes2)) {
+        //alert('Splitting: "' + lastequality + '"');
+        // Duplicate record
+        diffs.splice(equalities[equalities.length - 1], 0,
+                     [DIFF_DELETE, lastequality]);
+        // Change second copy to insert.
+        diffs[equalities[equalities.length - 1] + 1][0] = DIFF_INSERT;
+        // Throw away the equality we just deleted.
+        equalities.pop();
+        // Throw away the previous equality (it needs to be reevaluated).
+        equalities.pop();
+        pointer = equalities.length ? equalities[equalities.length - 1] : -1;
+        length_changes1 = 0;  // Reset the counters.
+        length_changes2 = 0;
+        lastequality = null;
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button onclick="hide('code9', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code9b" style="display: none">
+<textarea id="code9b_" class="java">public void diff_cleanupSemantic(LinkedList&lt;Diff&gt; diffs) {
+  // Reduce the number of edits by eliminating semantically trivial equalities.
+  if (diffs.isEmpty()) {
+    return;
+  }
+  boolean changes = false;
+  Stack&lt;Diff&gt; equalities = new Stack&lt;Diff&gt;();  // Stack of qualities.
+  String lastequality = null;  // Always equal to equalities.lastElement().text
+  ListIterator&lt;Diff&gt; pointer = diffs.listIterator();
+  // Number of characters that changed prior to the equality.
+  int length_changes1 = 0;
+  // Number of characters that changed after the equality.
+  int length_changes2 = 0;
+  Diff thisDiff = pointer.next();
+  while (thisDiff != null) {
+    if (thisDiff.operation == Operation.EQUAL) {
+      // equality found
+      equalities.push(thisDiff);
+      length_changes1 = length_changes2;
+      length_changes2 = 0;
+      lastequality = thisDiff.text;
+    } else {
+      // an insertion or deletion
+      length_changes2 += thisDiff.text.length();
+      if (lastequality != null &amp;&amp; (lastequality.length() &lt;= length_changes1)
+          &amp;&amp; (lastequality.length() &lt;= length_changes2)) {
+        //System.out.println("Splitting: '" + lastequality + "'");
+        // Walk back to offending equality.
+        while (thisDiff != equalities.lastElement()) {
+          thisDiff = pointer.previous();
+        }
+        pointer.next();
+
+        // Replace equality with a delete.
+        pointer.set(new Diff(Operation.DELETE, lastequality));
+        // Insert a corresponding an insert.
+        pointer.add(new Diff(Operation.INSERT, lastequality));
+
+        equalities.pop();  // Throw away the equality we just deleted.
+        if (!equalities.empty()) {
+          // Throw away the previous equality (it needs to be reevaluated).
+          equalities.pop();
+        }
+        if (equalities.empty()) {
+          // There are no previous equalities, walk back to the start.
+          while (pointer.hasPrevious()) {
+            pointer.previous();
+          }
+        } else {
+          // There is a safe equality we can fall back to.
+          thisDiff = equalities.lastElement();
+          while (thisDiff != pointer.previous()) {
+            // Intentionally empty loop.
+          }
+        }
+
+        length_changes1 = 0;  // Reset the counters.
+        length_changes2 = 0;
+        lastequality = null;
+        changes = true;
+      }
+    }
+    thisDiff = pointer.hasNext() ? pointer.next() : null;
+  }
+
+  if (changes) {
+    diff_cleanupMerge(diffs);
+  }
+}</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code9', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code9c" style="display: none">
+<textarea id="code9c_" class="python">def diff_cleanupSemantic(diffs):
+  # Reduce the number of edits by eliminating semantically trivial equalities.
+  changes = False
+  equalities = []  # Stack of indices where equalities are found.
+  lastequality = None  # Always equal to equalities[-1][1]
+  pointer = 0  # Index of current position.
+  length_changes1 = 0  # Number of chars that changed prior to the equality.
+  length_changes2 = 0  # Number of chars that changed after the equality.
+  while pointer &lt; len(diffs):
+    if diffs[pointer][0] == DIFF_EQUAL:  # equality found
+      equalities.append(pointer)
+      length_changes1 = length_changes2
+      length_changes2 = 0
+      lastequality = diffs[pointer][1]
+    else:  # an insertion or deletion
+      length_changes2 += len(diffs[pointer][1])
+      if (lastequality != None and (len(lastequality) &lt;= length_changes1) and
+          (len(lastequality) &lt;= length_changes2)):
+        # Duplicate record
+        diffs.insert(equalities[-1], (DIFF_DELETE, lastequality))
+        # Change second copy to insert.
+        diffs[equalities[-1] + 1] = (DIFF_INSERT,
+            diffs[equalities[-1] + 1][1])
+        # Throw away the equality we just deleted.
+        equalities.pop()
+        # Throw away the previous equality (it needs to be reevaluated).
+        if len(equalities) != 0:
+          equalities.pop()
+        if len(equalities):
+          pointer = equalities[-1]
+        else:
+          pointer = -1
+        length_changes1 = 0  # Reset the counters.
+        length_changes2 = 0
+        lastequality = None
+        changes = True
+    pointer += 1
+
+  if changes:
+    diff_cleanupMerge(diffs)</textarea>
+<p>See earlier code for 'diff_cleanupMerge' function.</p>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code9', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<p>This solution is not perfect.  It has tunnel vision; it is unable to 
+see beyond the immediate neighbourhood of each equality it evaluates.  
+This can result in small groups of chaff surviving:</p>
+
+<code>Text 1: It was a dark and stormy night.<br>
+Text 2: The black can in the cupboard.<br>
+Diff:&nbsp; &nbsp;<del>It</del><ins>The</ins> <del>w</del><ins>bl</ins>a<del>s a dar</del><ins>c</ins>k <ins>c</ins>an<del>d</del> <del>s</del><ins>in </ins>t<ins>he cupb</ins>o<ins>a</ins>r<del>my night</del><ins>d</ins>.<br>
+Split:&nbsp; <del>It</del><ins>The</ins><del>&nbsp;</del><ins>&nbsp;</ins><del>w</del><ins>bl</ins><del>a</del><ins>a</ins><del>s a dar</del><ins>c</ins>k <ins>c</ins>an<del>d</del><del>&nbsp;</del><ins>&nbsp;</ins><del>s</del><ins>in </ins><del>t</del><ins>t</ins><ins>he cupb</ins><del>o</del><ins>o</ins><ins>a</ins><del>r</del><ins>r</ins><del>my night</del><ins>d</ins>.<br>
+Merge:&nbsp; <del>It was a dar</del><ins>The blac</ins>k <ins>c</ins>an<del>d stormy night</del><ins> in the cupboard</ins>.</code>
+
+<p>A more comprehensive solution might compute a weighted average of differences further away from the equality in question.</p>
+
+<h4>3.2.2 &nbsp; Semantic Allignment</h4>
+
+<p>A separate issue with creating semantically meaningful diffs is 
+aligning edit boundaries to logical divisions.  Consider the following 
+diffs:</p>
+
+<code>Text 1: That cartoon.<br>
+Text 2: That cat cartoon.<br>
+Diff 1: Th<ins>at c</ins>at cartoon.<br>
+Diff 2: Tha<ins>t ca</ins>t cartoon.<br>
+Diff 3: That<ins> cat</ins> cartoon.<br>
+Diff 4: That <ins>cat </ins>cartoon.<br>
+Diff 5: That c<ins>at c</ins>artoon.<br>
+Diff 6: That ca<ins>t ca</ins>rtoon.<br>
+</code>
+
+<p>All six diffs are valid and minimal.  Diffs 1 and 6 are the ones most
+ likely to be returned by diff algorithms.  But diffs 3 and 4 are more 
+likely to capture the semantic meaning of the diff.</p>
+
+<p>The solution is to locate each insertion or deletion which is 
+surrounded on both sides by equalities, and attempt to slide them 
+sideways.  If the last token of the preceeding equality equals the last 
+token of the edit, then the edit may be slid left.  Likewise if the 
+first token of the edit equals the first token of the following 
+equality, then the edit may be slit right.  Each of the possible 
+locations can be scored based on whether the boundaries appear to be 
+logical.  One scheme which works is:</p>
+
+<ul>
+<li>One point if a boundary is adjacent to a non-alphanumeric character.</li>
+<li>Two points if a boundary is adjacent to whitespace.</li>
+<li>Three points if a boundary is adjacent to a line break.</li>
+<li>Four points if a boundary is adjacent to a blank line.</li>
+<li>Five points if a boundary has consumed the entire equality.</li>
+</ul>
+
+<p>This scheme would give scores of zero to diffs 1, 2, 5 and 6, while giving scores of four to diffs 3 and 4.</p>
+
+<fieldset><legend>Sample Code</legend>
+<div id="code10"><button onclick="show('code10', 'a')">Show JavaScript</button> &nbsp; <button onclick="show('code10', 'b')">Show Java</button> &nbsp; <button onclick="show('code10', 'c')">Show Python</button></div>
+<div id="code10a" style="display: none">
+<textarea id="code10a_" class="javascript">function diff_cleanupSemanticLossless(diffs) {
+  // Look for single edits surrounded on both sides by equalities
+  // which can be shifted sideways to align the edit to a word boundary.
+  // e.g: The c&lt;ins&gt;at c&lt;/ins&gt;ame. -&gt; The &lt;ins&gt;cat &lt;/ins&gt;came.
+  // Define some regex patterns for matching boundaries. 
+  var punctuation = /[^a-zA-Z0-9]/;
+  var whitespace = /\s/;
+  var linebreak = /[\r\n]/;
+  var blanklineEnd = /\n\r?\n$/;
+  var blanklineStart = /^\r?\n\r?\n/;
+
+  function diff_cleanupSemanticScore(one, two) {
+    // Given two strings, compute a score representing whether the internal
+    // boundary falls on logical boundaries.
+    // Scores range from 5 (best) to 0 (worst).
+    // Closure, makes reference to regex patterns defined above.
+    if (!one || !two) {
+      // Edges are the best.
+      return 5;
+    }
+
+    // Each port of this function behaves slightly differently due to
+    // subtle differences in each language's definition of things like
+    // 'whitespace'.  Since this function's purpose is largely cosmetic,
+    // the choice has been made to use each language's native features
+    // rather than force total conformity.
+    var score = 0;
+    // One point for non-alphanumeric.
+    if (one.charAt(one.length - 1).match(punctuation) ||
+        two.charAt(0).match(punctuation)) {
+      score++;
+      // Two points for whitespace.
+      if (one.charAt(one.length - 1).match(whitespace) ||
+          two.charAt(0).match(whitespace)) {
+        score++;
+        // Three points for line breaks.
+        if (one.charAt(one.length - 1).match(linebreak) ||
+            two.charAt(0).match(linebreak)) {
+          score++;
+          // Four points for blank lines.
+          if (one.match(blanklineEnd) || two.match(blanklineStart)) {
+            score++;
+          }
+        }
+      }
+    }
+    return score;
+  }
+
+  var pointer = 1;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (pointer &lt; diffs.length - 1) {
+    if (diffs[pointer - 1][0] == DIFF_EQUAL &amp;&amp;
+        diffs[pointer + 1][0] == DIFF_EQUAL) {
+      // This is a single edit surrounded by equalities.
+      var equality1 = diffs[pointer - 1][1];
+      var edit = diffs[pointer][1];
+      var equality2 = diffs[pointer + 1][1];
+
+      // First, shift the edit as far left as possible.
+      var commonOffset = diff_commonSuffix(equality1, edit);
+      if (commonOffset) {
+        var commonString = edit.substring(edit.length - commonOffset);
+        equality1 = equality1.substring(0, equality1.length - commonOffset);
+        edit = commonString + edit.substring(0, edit.length - commonOffset);
+        equality2 = commonString + equality2;
+      }
+
+      // Second, step character by character right, looking for the best fit.
+      var bestEquality1 = equality1;
+      var bestEdit = edit;
+      var bestEquality2 = equality2;
+      var bestScore = diff_cleanupSemanticScore(equality1, edit) +
+          diff_cleanupSemanticScore(edit, equality2);
+      while (edit.charAt(0) === equality2.charAt(0)) {
+        equality1 += edit.charAt(0);
+        edit = edit.substring(1) + equality2.charAt(0);
+        equality2 = equality2.substring(1);
+        var score = diff_cleanupSemanticScore(equality1, edit) +
+            diff_cleanupSemanticScore(edit, equality2);
+        // The &gt;= encourages trailing rather than leading whitespace on edits.
+        if (score &gt;= bestScore) {
+          bestScore = score;
+          bestEquality1 = equality1;
+          bestEdit = edit;
+          bestEquality2 = equality2;
+        }
+      }
+
+      if (diffs[pointer - 1][1] != bestEquality1) {
+        // We have an improvement, save it back to the diff.
+        if (bestEquality1) {
+          diffs[pointer - 1][1] = bestEquality1;
+        } else {
+          diffs.splice(pointer - 1, 1);
+          pointer--;
+        }
+        diffs[pointer][1] = bestEdit;
+        if (bestEquality2) {
+          diffs[pointer + 1][1] = bestEquality2;
+        } else {
+          diffs.splice(pointer + 1, 1);
+          pointer--;
+        }
+      }
+    }
+    pointer++;
+  }
+}</textarea>
+<div><button onclick="hide('code10', 'a')">Hide JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code10b" style="display: none">
+<textarea id="code10b_" class="java">public void diff_cleanupSemanticLossless(LinkedList&lt;Diff&gt; diffs) {
+  // Look for single edits surrounded on both sides by equalities
+  // which can be shifted sideways to align the edit to a word boundary.
+  // e.g: The c&lt;ins&gt;at c&lt;/ins&gt;ame. -&gt; The &lt;ins&gt;cat &lt;/ins&gt;came.
+  String equality1, edit, equality2;
+  String commonString;
+  int commonOffset;
+  int score, bestScore;
+  String bestEquality1, bestEdit, bestEquality2;
+  // Create a new iterator at the start.
+  ListIterator&lt;Diff&gt; pointer = diffs.listIterator();
+  Diff prevDiff = pointer.hasNext() ? pointer.next() : null;
+  Diff thisDiff = pointer.hasNext() ? pointer.next() : null;
+  Diff nextDiff = pointer.hasNext() ? pointer.next() : null;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (nextDiff != null) {
+    if (prevDiff.operation == Operation.EQUAL &amp;&amp;
+        nextDiff.operation == Operation.EQUAL) {
+      // This is a single edit surrounded by equalities.
+      equality1 = prevDiff.text;
+      edit = thisDiff.text;
+      equality2 = nextDiff.text;
+
+      // First, shift the edit as far left as possible.
+      commonOffset = diff_commonSuffix(equality1, edit);
+      if (commonOffset != 0) {
+        commonString = edit.substring(edit.length() - commonOffset);
+        equality1 = equality1.substring(0, equality1.length() - commonOffset);
+        edit = commonString + edit.substring(0, edit.length() - commonOffset);
+        equality2 = commonString + equality2;
+      }
+
+      // Second, step character by character right, looking for the best fit.
+      bestEquality1 = equality1;
+      bestEdit = edit;
+      bestEquality2 = equality2;
+      bestScore = diff_cleanupSemanticScore(equality1, edit)
+          + diff_cleanupSemanticScore(edit, equality2);
+      while (edit.length() != 0 &amp;&amp; equality2.length() != 0
+          &amp;&amp; edit.charAt(0) == equality2.charAt(0)) {
+        equality1 += edit.charAt(0);
+        edit = edit.substring(1) + equality2.charAt(0);
+        equality2 = equality2.substring(1);
+        score = diff_cleanupSemanticScore(equality1, edit)
+            + diff_cleanupSemanticScore(edit, equality2);
+        // The &gt;= encourages trailing rather than leading whitespace on edits.
+        if (score &gt;= bestScore) {
+          bestScore = score;
+          bestEquality1 = equality1;
+          bestEdit = edit;
+          bestEquality2 = equality2;
+        }
+      }
+
+      if (!prevDiff.text.equals(bestEquality1)) {
+        // We have an improvement, save it back to the diff.
+        if (bestEquality1.length() != 0) {
+          prevDiff.text = bestEquality1;
+        } else {
+          pointer.previous(); // Walk past nextDiff.
+          pointer.previous(); // Walk past thisDiff.
+          pointer.previous(); // Walk past prevDiff.
+          pointer.remove(); // Delete prevDiff.
+          pointer.next(); // Walk past thisDiff.
+          pointer.next(); // Walk past nextDiff.
+        }
+        thisDiff.text = bestEdit;
+        if (bestEquality2.length() != 0) {
+          nextDiff.text = bestEquality2;
+        } else {
+          pointer.remove(); // Delete nextDiff.
+          nextDiff = thisDiff;
+          thisDiff = prevDiff;
+        }
+      }
+    }
+    prevDiff = thisDiff;
+    thisDiff = nextDiff;
+    nextDiff = pointer.hasNext() ? pointer.next() : null;
+  }
+}
+
+private int diff_cleanupSemanticScore(String one, String two) {
+  // Given two strings, compute a score representing whether the internal
+  // boundary falls on logical boundaries.
+  // Scores range from 5 (best) to 0 (worst).
+  if (one.length() == 0 || two.length() == 0) {
+    // Edges are the best.
+    return 5;
+  }
+
+  // Each port of this function behaves slightly differently due to
+  // subtle differences in each language's definition of things like
+  // 'whitespace'.  Since this function's purpose is largely cosmetic,
+  // the choice has been made to use each language's native features
+  // rather than force total conformity.
+  int score = 0;
+  // One point for non-alphanumeric.
+  if (!Character.isLetterOrDigit(one.charAt(one.length() - 1))
+      || !Character.isLetterOrDigit(two.charAt(0))) {
+    score++;
+    // Two points for whitespace.
+    if (Character.isWhitespace(one.charAt(one.length() - 1))
+        || Character.isWhitespace(two.charAt(0))) {
+      score++;
+      // Three points for line breaks.
+      if (Character.getType(one.charAt(one.length() - 1)) == Character.CONTROL
+          || Character.getType(two.charAt(0)) == Character.CONTROL) {
+        score++;
+        // Four points for blank lines.
+        if (BLANKLINEEND.matcher(one).find()
+            || BLANKLINESTART.matcher(two).find()) {
+          score++;
+        }
+      }
+    }
+  }
+  return score;
+}
+
+private Pattern BLANKLINEEND
+    = Pattern.compile("\\n\\r?\\n\\Z", Pattern.DOTALL);
+private Pattern BLANKLINESTART
+    = Pattern.compile("\\A\\r?\\n\\r?\\n", Pattern.DOTALL);
+</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button onclick="hide('code10', 'b')">Hide Java</button> &nbsp; <button disabled="disabled">Show Python</button></div>
+</div>
+<div id="code10c" style="display: none">
+<textarea id="code10c_" class="python">def diff_cleanupSemanticLossless(diffs):
+  # Look for single edits surrounded on both sides by equalities
+  # which can be shifted sideways to align the edit to a word boundary.
+  # e.g: The c&lt;ins&gt;at c&lt;/ins&gt;ame. -&gt; The &lt;ins&gt;cat &lt;/ins&gt;came.
+
+  def diff_cleanupSemanticScore(one, two):
+    # Given two strings, compute a score representing whether the
+    # internal boundary falls on logical boundaries.
+    # Scores range from 5 (best) to 0 (worst).
+    # Closure, but does not reference any external variables.
+
+    if not one or not two:
+      # Edges are the best.
+      return 5
+
+    # Each port of this function behaves slightly differently due to
+    # subtle differences in each language's definition of things like
+    # 'whitespace'.  Since this function's purpose is largely cosmetic,
+    # the choice has been made to use each language's native features
+    # rather than force total conformity.
+    score = 0
+    # One point for non-alphanumeric.
+    if not one[-1].isalnum() or not two[0].isalnum():
+      score += 1
+      # Two points for whitespace.
+      if one[-1].isspace() or two[0].isspace():
+        score += 1
+        # Three points for line breaks.
+        if (one[-1] == "\r" or one[-1] == "\n" or
+            two[0] == "\r" or two[0] == "\n"):
+          score += 1
+          # Four points for blank lines.
+          if (re.search("\\n\\r?\\n$", one) or
+              re.match("^\\r?\\n\\r?\\n", two)):
+            score += 1
+    return score
+
+  pointer = 1
+  # Intentionally ignore the first and last element (don't need checking).
+  while pointer &lt; len(diffs) - 1:
+    if (diffs[pointer - 1][0] == DIFF_EQUAL and
+        diffs[pointer + 1][0] == DIFF_EQUAL):
+      # This is a single edit surrounded by equalities.
+      equality1 = diffs[pointer - 1][1]
+      edit = diffs[pointer][1]
+      equality2 = diffs[pointer + 1][1]
+
+      # First, shift the edit as far left as possible.
+      commonOffset = diff_commonSuffix(equality1, edit)
+      if commonOffset:
+        commonString = edit[-commonOffset:]
+        equality1 = equality1[:-commonOffset]
+        edit = commonString + edit[:-commonOffset]
+        equality2 = commonString + equality2
+
+      # Second, step character by character right, looking for the best fit.
+      bestEquality1 = equality1
+      bestEdit = edit
+      bestEquality2 = equality2
+      bestScore = (diff_cleanupSemanticScore(equality1, edit) +
+          diff_cleanupSemanticScore(edit, equality2))
+      while edit and equality2 and edit[0] == equality2[0]:
+        equality1 += edit[0]
+        edit = edit[1:] + equality2[0]
+        equality2 = equality2[1:]
+        score = (diff_cleanupSemanticScore(equality1, edit) +
+            diff_cleanupSemanticScore(edit, equality2))
+        # The &gt;= encourages trailing rather than leading whitespace on edits.
+        if score &gt;= bestScore:
+          bestScore = score
+          bestEquality1 = equality1
+          bestEdit = edit
+          bestEquality2 = equality2
+
+      if diffs[pointer - 1][1] != bestEquality1:
+        # We have an improvement, save it back to the diff.
+        if bestEquality1:
+          diffs[pointer - 1] = (diffs[pointer - 1][0], bestEquality1)
+        else:
+          del diffs[pointer - 1]
+          pointer -= 1
+        diffs[pointer] = (diffs[pointer][0], bestEdit)
+        if bestEquality2:
+          diffs[pointer + 1] = (diffs[pointer + 1][0], bestEquality2)
+        else:
+          del diffs[pointer + 1]
+          pointer -= 1
+    pointer += 1</textarea>
+<div><button disabled="disabled">Show JavaScript</button> &nbsp; <button disabled="disabled">Show Java</button> &nbsp; <button onclick="hide('code10', 'c')">Hide Python</button></div>
+</div>
+</fieldset>
+
+<link type="text/css" rel="stylesheet" href="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/SyntaxHighlighter.css">
+<script language="javascript" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/shCore.js"></script>
+<script language="javascript" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/shBrushJScript.js"></script>
+<script language="javascript" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/shBrushJava.js"></script>
+<script language="javascript" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/shBrushPython.js"></script>
+<script language="javascript">
+  //dp.SyntaxHighlighter.ClipboardSwf = '../../dp.SyntaxHighlighter//flash/clipboard.swf';
+  //dp.SyntaxHighlighter.HighlightAll('code');
+</script>
+
+<div><img style="width: 100%" src="Neil%20Fraser%20%20Writing%20%20Diff%20Strategies_files/lineblue.jpg" alt="-------------------------------------" width="540" height="4"></div>
+
+<p><i>See an <a href="https://github.com/google/diff-match-patch">implementation</a> and online <a href="https://neil.fraser.name/software/diff_match_patch/demos/diff.html">demonstration</a> of diff.<br>
+See also the companion paper on diff's counterpart: <a href="https://neil.fraser.name/writing/patch/">Patch</a></i></p>
+
+<div class="nav"><a href="https://neil.fraser.name/">Neil Fraser</a>: <a href="https://neil.fraser.name/writing/">Writing</a>: Diff Strategies</div>
+<div class="lmb">Last modified: 15 August 2008</div>
+
+
+
+</body></html>
